@@ -316,7 +316,7 @@ def get_rightmost_blank(im_gray,template,force=False,ignore_rightmost=0):
         while 1:
             result = cv2.matchTemplate(im_gray, tmp, cv2.TM_CCOEFF_NORMED)
             (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(result)
-            if maxVal <.55: # worked at .6 except images-cc0clear\1600883194132.png
+            if maxVal <.54: # worked at .6 except images-cc0clear\1600883194132.png
                 if DEBUG:
                     print('value too low',maxVal)
                 break
@@ -336,6 +336,11 @@ def get_rightmost_blank(im_gray,template,force=False,ignore_rightmost=0):
         forced = True
         half_template = template[:,0:int(template.shape[1]/2)]
         right_coords = match(half_template)
+        if not right_coords:
+            #try again with quarter template
+            print('forcing match w/ quarter template...')
+            quarter_template = template[0:int(template.shape[0]/2),0:int(template.shape[1]/2)]
+            right_coords = match(quarter_template)
     return forced,right_coords
 LOWER_GRAY = np.array([0,0,0])
 UPPER_GRAY = np.array([255,45,255])
@@ -823,8 +828,8 @@ paths = list(imagesDir.glob('*.*'))
 # paths = [random.choice(paths)]
 
 # test a specific image:
-# test = './images-cc4clear/1626413456716.png'
-
+# test = './images-cc1clear/1605109000511.jpg' 
+# test = './images-cc1clear/1606203199640.jpg'
 DEBUG = False
 SHOW_RES = False
 DO_ASSERTS = False
@@ -839,8 +844,8 @@ if len(paths) == 1:
 
 with assertTests.open('rb') as f:
     assert_pairs = pickle.load(f)
-# add new pairs:
-assert_pairs['./images-cc4clear/1626413456716.png']: ['char_401_elysm_2.png', 'char_107_liskam_2.png', 'char_350_surtr.png', 'char_151_myrtle_2.png', 'char_202_demkni_test#1.png', 'char_010_chen_nian#2.png', 'char_222_bpipe_race#1.png', 'char_128_plosis_epoque#3.png', 'char_311_mudrok_2.png', 'char_252_bibeak_winter#2.png']
+# add new assert tests:
+assert_pairs['./images-cc1clear/1606203199640.jpg']: ['char_180_amgoat_2.png', 'char_112_siege.png', 'char_337_utage_2.png', 'char_133_mm_2.png', 'char_222_bpipe_2.png', 'char_213_mostma_epoque#5.png', 'char_202_demkni.png', 'char_243_waaifu_2.png', 'char_128_plosis_epoque#3.png', 'char_285_medic2.png', 'char_215_mantic_epoque#4.png', 'char_118_yuki_2.png', 'char_151_myrtle.png']
 with assertTests.open('wb') as f:
     pickle.dump(assert_pairs, f)
 # must do this before anything else

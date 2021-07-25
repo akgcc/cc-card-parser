@@ -17,15 +17,19 @@ while next_page:
         etree = lxmlhtml.fromstring(r.text)
     images = etree.xpath('//aside[contains(@class,"posts")]/article//div[contains(@class,"post_file")]/a/@href')
     next_page = next(iter(etree.xpath('//li[@class="next"]/a/@href')),None)
+    new = 0
     for imagepath in images:
         destPath = outputDir.joinpath(imagepath.split('/')[-1])
         dupePath = outputDir.joinpath('invalid/').joinpath(imagepath.split('/')[-1])
         print(destPath)
         if not destPath.exists() and not dupePath.exists():
+            new += 1
             with destPath.open('wb') as f:
                 f.write(s.get(imagepath).content)
             time.sleep(1)
     else:
+        if not new and len(images) > 5:
+            break
         time.sleep(2)
         continue
     break
