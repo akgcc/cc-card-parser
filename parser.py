@@ -379,7 +379,6 @@ def mostly_gray(im):
 
     result = cv2.matchTemplate(im_gs[0:th,0:tw], template, cv2.TM_CCOEFF_NORMED)
     (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(result)
-
     if maxVal > .9:
         return True
     contours, hierarchy = cv2.findContours(gray,cv2.RETR_TREE,cv2.CHAIN_APPROX_NONE)
@@ -388,11 +387,12 @@ def mostly_gray(im):
     c = max(contours, key = cv2.contourArea)
     x,y,w,h = cv2.boundingRect(c)
     if DEBUG:
-        print('gray_contours:',len(contours),abs(im.shape[0]-h),abs(im.shape[1]-w),im.shape[1],gray_percent)
+        print('gray_contours:',len(contours),abs(im.shape[0]-h),abs(im.shape[1]-w),im.shape[1],gray_percent,maxVal)
     return len(contours)==0 or (
     abs(im.shape[0]-h) <3 \
     and abs(im.shape[1]-w) > im.shape[1]*.12 \
-    and gray_percent >  GRAY_MIN_PERCENT)
+    and gray_percent >  GRAY_MIN_PERCENT \
+    and maxVal > .1)
     # if len(contours):
         # c = max(contours, key = cv2.contourArea)
         # x,y,w,h = cv2.boundingRect(c)
@@ -413,6 +413,8 @@ def mostly_gray(im):
 def match_op(roi):
     if mostly_gray(roi):
         return 1,BLANK_NAME
+    # cv2.imshow('roi',roi)
+    # cv2.waitKey()
     def sift_diff(kp_1,desc_1,av_name):
         kp_2,desc_2 = av_sifts[av_name]
         if len(kp_1)<2 or len(kp_2)<2:
@@ -821,7 +823,7 @@ paths = list(imagesDir.glob('*.*'))
 # paths = [random.choice(paths)]
 
 # test a specific image:
-# test='./images-cc3clear/1622319178548.png'
+# test = './images-cc4clear/1626413456716.png'
 
 DEBUG = False
 SHOW_RES = False
@@ -838,7 +840,7 @@ if len(paths) == 1:
 with assertTests.open('rb') as f:
     assert_pairs = pickle.load(f)
 # add new pairs:
-assert_pairs['./images-cc2clear/1613024975510.png']: ['char_2013_cerber.png', 'char_180_amgoat.png', 'char_355_ethan_2.png', 'char_128_plosis_epoque#3.png', 'char_107_liskam_nian#2.png', 'char_195_glassb_2.png', 'char_151_myrtle_2.png', 'char_237_gravel_2.png', 'char_222_bpipe_2.png', 'char_136_hsguma_2.png']
+assert_pairs['./images-cc4clear/1626413456716.png']: ['char_401_elysm_2.png', 'char_107_liskam_2.png', 'char_350_surtr.png', 'char_151_myrtle_2.png', 'char_202_demkni_test#1.png', 'char_010_chen_nian#2.png', 'char_222_bpipe_race#1.png', 'char_128_plosis_epoque#3.png', 'char_311_mudrok_2.png', 'char_252_bibeak_winter#2.png']
 with assertTests.open('wb') as f:
     pickle.dump(assert_pairs, f)
 # must do this before anything else
