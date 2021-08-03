@@ -56,7 +56,7 @@ def dictupdate(d, u):
         else:
             d[k] = v
     return d
-def add_rarity_data(data):
+def add_extra_data(data):
     with charDataPath.open('rb') as f:
         chardata = json.load(f)
     for k,v in data.items():
@@ -830,6 +830,9 @@ paths = list(imagesDir.glob('*.*'))
 # test a specific image:
 # test = './images-cc1clear/1605109000511.jpg' 
 # test = './images-cc1clear/1606203199640.jpg'
+# test = './images-cc4clear/1627301022848.png'
+# test = './images-cc3clear/1622356297879.png'
+
 DEBUG = False
 SHOW_RES = False
 DO_ASSERTS = False
@@ -887,6 +890,6 @@ createThumbs()
 print('parsing risks...')
 parse_risks(data)
 fix_json_data(data)
-add_rarity_data(data)
+add_extra_data(data)
 with DATA_JSON.open('w') as f:
     json.dump(data,f)
