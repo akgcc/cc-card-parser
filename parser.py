@@ -153,16 +153,20 @@ def crop_titlebar(im):
         return im[y:h, :]
     return im
 def parse_risks(data):
+
+    testimg = 'asdf'#'1599804643036.jpg'#'1599766639097.jpg'#'1605112361906.jpg'#'1605544770468.png'#'1605204799361.png'#'1605132302340.png'#'1605156221752.png'
     # expects 2 digits, doesn't work on occluded numbers.
     RISK_NUMBER_TEMPLATES = [cv2.cvtColor(cv2.imread(str(numsDir.joinpath(f'{i}.png'))),cv2.COLOR_BGR2GRAY) for i in range(10)]
+    LARGE_RISK_NUMBER_TEMPLATES = [cv2.resize(im,(int(im.shape[1]*1.15),int(im.shape[0]*1.15))) for im in RISK_NUMBER_TEMPLATES]
+    # RISK_NUMBER_TEMPLATES = [cv2.Canny(image=cv2.GaussianBlur(im, (3,3), 0), threshold1=100, threshold2=200) for im in RISK_NUMBER_TEMPLATES]
+    # LARGE_RISK_NUMBER_TEMPLATES = [cv2.Canny(image=cv2.GaussianBlur(im, (3,3), 0), threshold1=100, threshold2=200) for im in LARGE_RISK_NUMBER_TEMPLATES]
     riskpaths = list(riskDir.resolve().glob('*.*'))[:]
-    
     for path in riskpaths:
         # print(path.name)
         im = cv2.imread(str(path))
         hsv = cv2.cvtColor(im, cv2.COLOR_BGR2HSV)
         lower_gray = np.array([0,0,75])
-        upper_gray = np.array([255,10,255])
+        upper_gray = np.array([255,15,255])#[255,10,255]
         mask = cv2.inRange(hsv, lower_gray, upper_gray)
         kernel = np.ones((5,5), np.uint8)
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
@@ -173,24 +177,65 @@ def parse_risks(data):
         c = max(contours, key = cv2.contourArea)
         x,y,w,h = cv2.boundingRect(c)
         
-        crop = mask[y:y+h,:]
-        oh,ow = crop.shape
-        crop=cv2.resize(crop, (int(ow*45/oh),45), interpolation = cv2.INTER_AREA)
+        # crop = mask[y:y+h,:]
+        # oh,ow = crop.shape
+        # crop=cv2.resize(crop, (int(ow*45/oh),45), interpolation = cv2.INTER_AREA)
+        if path.name == testimg:
+            # edges = cv2.Canny(image=crop, threshold1=100, threshold2=200)
+            cv2.imshow('i',mask)
+            cv2.waitKey()
+             
+        # mask = cv2.Canny(image=cv2.GaussianBlur(mask, (3,3), 0), threshold1=100, threshold2=200)
         digits = []
+        
+        # digits in jp client are scaled by ~115%
+        # if first match in (1,2,3) we can assume?? its the left digit (we can't)
+        baseline = None
+        template_set = (0,1) # 0 is normal template, 1 is large
         for attempt in range(2):
             results = []
             for i in range(10):
-                template = RISK_NUMBER_TEMPLATES[i]
-                res = cv2.matchTemplate(mask,template,cv2.TM_CCOEFF_NORMED)#,mask=template)
-                min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
-                results.append((max_val,i,max_loc))
-            score,num,loc = sorted(results)[-1]
+                if 0 in template_set:
+                    template = RISK_NUMBER_TEMPLATES[i]
+                    res = cv2.matchTemplate(mask,template,cv2.TM_CCOEFF_NORMED)#,mask=template)
+                    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+                    results.append((max_val,i,max_loc,0))
+                if 1 in template_set:
+                    template = LARGE_RISK_NUMBER_TEMPLATES[i]
+                    res = cv2.matchTemplate(mask,template,cv2.TM_CCOEFF_NORMED)#,mask=template)
+                    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+                    results.append((max_val,i,max_loc,1))
+            if path.name == testimg:
+                print(sorted(results))
+            if 0 or baseline != None:
+                # modify results by closeness to previous result baseline since numbers should be the same height
+                results = [(a - abs(baseline-c[1])/100,b,c,d) for a,b,c,d in results]
+            if path.name == testimg:
+                print(sorted(results))
+            score,num,loc,ts = sorted(results)[-1]
+            if path.name == testimg:
+                print(loc)
+            if baseline == None:
+                baseline = loc[1]
+            # if len(template_set) > 1:
+                # template_set = (ts,)
             h,w=RISK_NUMBER_TEMPLATES[i].shape
             mask[loc[1]:loc[1]+h, loc[0]:loc[0]+w]=0
-            if score > .2:
-                digits.append((loc[0],num))
+            if path.name == testimg:
+                cv2.imshow('i',mask)
+                cv2.waitKey()
+            if score > .5:#.25: #was .5 before edge # was .2
+                digits.append((loc[0],num, score))
+        loc_x_diff = 0
+        if len(digits)> 1:
+            loc_x_diff = abs(digits[0][0] - digits[1][0])
+        # print(loc_x_diff)
         risk = int('0'+''.join([str(i[1]) for i in sorted(digits)]))
+        if loc_x_diff > 44:# or (risk < 18 or risk > 35):
+            risk = int(sorted(digits, key=lambda x: x[2])[-1][1])
         if path.name in data:
+            if path.name == testimg:
+                print(risk)
             data[path.name]['risk'] = risk
     return data
 
@@ -821,75 +866,90 @@ def _generate_avatar_data(rebuild_all=False):
         pickle.dump(av_hists, f)
     with AV_SIFTS_DATA.open('wb') as f:
         pickle.dump(av_sifts, f)
-
-test = None
-paths = list(imagesDir.glob('*.*'))
-# test a random image:
-# paths = [random.choice(paths)]
-
-# test a specific image:
-# test = './images-cc1clear/1605109000511.jpg' 
-# test = './images-cc1clear/1606203199640.jpg'
-# test = './images-cc4clear/1627301022848.png'
-# test = './images-cc3clear/1622356297879.png'
-
+        
 DEBUG = False
 SHOW_RES = False
 DO_ASSERTS = False
-# DEBUG = True
-# SHOW_RES = True
-# DO_ASSERTS = True
+if __name__ == '__main__':
+    test = None
+    paths = list(imagesDir.glob('*.*'))
+    # test a random image:
+    # paths = [random.choice(paths)]
 
-if test:
-    paths = [Path(test).resolve()]
-if len(paths) == 1:
-    SHOW_RES = True
+    # test a specific image:
+    # test = './images-cc1clear/1605109000511.jpg' 
+    # test = './images-cc1clear/1606203199640.jpg'
+    # test = './images-cc4clear/1627301022848.png'
+    # test = './images-cc3clear/1622356297879.png'
 
-with assertTests.open('rb') as f:
-    assert_pairs = pickle.load(f)
-# add new assert tests:
-assert_pairs['./images-cc1clear/1606203199640.jpg']: ['char_180_amgoat_2.png', 'char_112_siege.png', 'char_337_utage_2.png', 'char_133_mm_2.png', 'char_222_bpipe_2.png', 'char_213_mostma_epoque#5.png', 'char_202_demkni.png', 'char_243_waaifu_2.png', 'char_128_plosis_epoque#3.png', 'char_285_medic2.png', 'char_215_mantic_epoque#4.png', 'char_118_yuki_2.png', 'char_151_myrtle.png']
-with assertTests.open('wb') as f:
-    pickle.dump(assert_pairs, f)
-# must do this before anything else
-_generate_avatar_data()
 
-if DO_ASSERTS and not SHOW_RES:
-    for f,o in assert_pairs.items():
-        try:
-            assert set(parse_squad(Path(f).resolve(),save_images=False)) == set(o)
-        except:
-            print('failed for img',f)
-            raise
-    print('ALL ASSERTS PASSED'*20)
-    exit()
+    # DEBUG = True
+    # SHOW_RES = True
+    # DO_ASSERTS = True
 
-with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-    future_to_url = {executor.submit(parse_squad, path): path for path in paths}
-    for future in concurrent.futures.as_completed(future_to_url):
-        url = future_to_url[future]
-        try:
-            data = future.result()
-        except:
-            print('EXCEPTION IN THREAD:',url,flush=True)
-            with open('failed_image_parse.txt','w') as f:
-                f.write(str(url))
-            raise
-if len(paths)==1:
-    exit()
-with SQUAD_JSON.open('w') as f:
-    json.dump(SQUADS,f)
-print('processing done, removing dupes...')
-generate_data_json()
-with DATA_JSON.open('r') as f:
-    data = json.load(f)
-if TAG != '-ccb':
-    remove_duplicates(data)
-print('creating thumbnails...')
-createThumbs()
-print('parsing risks...')
-parse_risks(data)
-fix_json_data(data)
-add_extra_data(data)
-with DATA_JSON.open('w') as f:
-    json.dump(data,f)
+    if test:
+        paths = [Path(test).resolve()]
+    if len(paths) == 1:
+        SHOW_RES = True
+
+    with assertTests.open('rb') as f:
+        assert_pairs = pickle.load(f)
+    # add new assert tests:
+    assert_pairs['./images-cc1clear/1606203199640.jpg']: ['char_180_amgoat_2.png', 'char_112_siege.png', 'char_337_utage_2.png', 'char_133_mm_2.png', 'char_222_bpipe_2.png', 'char_213_mostma_epoque#5.png', 'char_202_demkni.png', 'char_243_waaifu_2.png', 'char_128_plosis_epoque#3.png', 'char_285_medic2.png', 'char_215_mantic_epoque#4.png', 'char_118_yuki_2.png', 'char_151_myrtle.png']
+    with assertTests.open('wb') as f:
+        pickle.dump(assert_pairs, f)
+    # must do this before anything else
+    _generate_avatar_data()
+
+    if DO_ASSERTS and not SHOW_RES:
+        for f,o in assert_pairs.items():
+            try:
+                assert set(parse_squad(Path(f).resolve(),save_images=False)) == set(o)
+            except:
+                print('failed for img',f)
+                raise
+        print('ALL ASSERTS PASSED'*20)
+        exit()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        future_to_url = {executor.submit(parse_squad, path): path for path in paths}
+        for future in concurrent.futures.as_completed(future_to_url):
+            url = future_to_url[future]
+            try:
+                data = future.result()
+            except:
+                print('EXCEPTION IN THREAD:',url,flush=True)
+                with open('failed_image_parse.txt','w') as f:
+                    f.write(str(url))
+                raise
+    if len(paths)==1:
+        exit()
+    with SQUAD_JSON.open('w') as f:
+        json.dump(SQUADS,f)
+    print('processing done, removing dupes...')
+    generate_data_json()
+    with DATA_JSON.open('r') as f:
+        data = json.load(f)
+    if TAG != '-ccb':
+        remove_duplicates(data)
+    print('creating thumbnails...')
+    createThumbs()
+    print('parsing risks...')
+    parse_risks(data)
+    fix_json_data(data)
+    add_extra_data(data)
+    with DATA_JSON.open('w') as f:
+        json.dump(data,f)
+
+
+# risk parse test
+# import copy
+# with DATA_JSON.open('r') as f:
+    # data = json.load(f)
+# print('parsing risks...')
+# parsed = parse_risks(copy.deepcopy(data))
+# print(len(parsed),len(data))
+# fix_json_data(data)
+# for k in data:
+    # if parsed[k]['risk'] != data[k]['risk']:
+        # print(k,parsed[k]['risk'], data[k]['risk'])
