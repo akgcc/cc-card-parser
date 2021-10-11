@@ -9,6 +9,9 @@ import collections.abc
 import shutil
 import copyreg
 import pickle
+import itertools
+import statistics
+from soul import calculate_soul
 def _pickle_keypoints(point):
     return cv2.KeyPoint, (*point.pt, point.size, point.angle,
                           point.response, point.octave, point.class_id)
@@ -29,6 +32,7 @@ SQUADS = {}
 DATA_JSON = Path(f'data{TAG}.json').resolve()
 DATA_FIXES_JSON=Path(f'data{TAG}-fixes.json').resolve()
 doctorDir=Path(f'./doctors{TAG}/').resolve()
+# shutil.rmtree(doctorDir) # delete entire doctor dir to remove residual images
 doctorDir.mkdir(exist_ok=True)
 cropDir=Path(f'./cropped{TAG}/').resolve()
 cropDir.mkdir(exist_ok=True)
@@ -70,7 +74,9 @@ def generate_data_json():
     with SQUAD_JSON.open('r') as f:
         data = json.load(f)
     for k,v in data.items():
-        data[k] = {'squad':["char_002_amiya" if op=="char_1001_amiya2" else op for op in ['_'.join(i.split('_')[:3]).split('.')[0] for i in v]],'group':clear_group(k)}
+        # data[k] = {'squad': ['_'.join(i.split('_')[:3]).split('.')[0] for i in v],'group':clear_group(k)}
+        # amiya alt does not appear in character_table.json, so we coalesce her to normal amiya.
+        data[k] = {'squad': ["char_002_amiya" if op=="char_1001_amiya2" else op for op in ['_'.join(i.split('_')[:3]).split('.')[0] for i in v]],'group':clear_group(k)}
     for k in list(data.keys()):
         if not cropDir.joinpath(k).exists() and not cropDir.joinpath('duplicates/').joinpath(k).exists():
             del data[k]
@@ -240,7 +246,7 @@ def parse_risks(data):
     return data
 
 CC_START_DATES = {
-	'-ccb': 1592002800, #2020 june 12 16:00 UTC-7
+	'-ccbclear': 1592002800, #2020 june 12 16:00 UTC-7
 	'-cc0clear': 1599750000, #2020 sept 10 8:00 UTC-7
 	'-cc1clear': 1605114000, #2020 nov 11 10:00 UTC-7
 	'-cc2clear': 1612458000, #2021 feb 4 10:00 UTC-7
@@ -262,6 +268,17 @@ def clear_group(fname):
     if ts < (CCSTART + 604800) - (CCSTART % (60 * 60 * 24)) + 39600: # week 1 end
         return 1
     return 2
+def unsharp_mask(image, kernel_size=(5, 5), sigma=1.0, amount=1.0, threshold=0):
+    """Return a sharpened version of the image, using an unsharp mask."""
+    blurred = cv2.GaussianBlur(image, kernel_size, sigma)
+    sharpened = float(amount + 1) * image - float(amount) * blurred
+    sharpened = np.maximum(sharpened, np.zeros(sharpened.shape))
+    sharpened = np.minimum(sharpened, 255 * np.ones(sharpened.shape))
+    sharpened = sharpened.round().astype(np.uint8)
+    if threshold > 0:
+        low_contrast_mask = np.absolute(image - blurred) < threshold
+        np.copyto(sharpened, image, where=low_contrast_mask)
+    return sharpened
 def remove_duplicates(data):
     # move all files OUT of duplicates first
     for file in cropDir.joinpath('duplicates/').glob('*.*'):
@@ -273,19 +290,20 @@ def remove_duplicates(data):
         for dir in (cropDir, ):
             if dir.joinpath(fname).exists():
                 data[fname]['duplicate_of'] = originalName
-                try:
-                    dir.joinpath(fname).rename(dir.joinpath('duplicates/').joinpath(fname))
-                except FileExistsError:
-                    dir.joinpath(fname).unlink()
-        # for dir in (doctorDir, ):
-            # oDir = dir.joinpath('duplicates/').joinpath(f'{originalName.split(".")[0]}/')
-            # oDir.mkdir(exist_ok=True)
-            # if dir.joinpath(fname).exists():
+                # no longer move dupes to separate directory.
                 # try:
-                    # shutil.copy(dir.joinpath(fname) ,oDir.joinpath(fname))
-                    # shutil.copy(dir.joinpath(originalName) ,oDir.joinpath(originalName))
+                    # dir.joinpath(fname).rename(dir.joinpath('duplicates/').joinpath(fname))
                 # except FileExistsError:
-                    # pass
+                    # dir.joinpath(fname).unlink()
+        for dir in (doctorDir, ):
+            oDir = dir.joinpath('duplicates/').joinpath(f'{originalName.split(".")[0]}/')
+            oDir.mkdir(exist_ok=True)
+            if dir.joinpath(fname).exists():
+                try:
+                    shutil.copy(dir.joinpath(fname) ,oDir.joinpath(fname))
+                    shutil.copy(dir.joinpath(originalName) ,oDir.joinpath(originalName))
+                except FileExistsError:
+                    pass
     paths = list(doctorDir.glob('*.*'))
     def merge(d,v):
         for k in v:
@@ -296,49 +314,143 @@ def remove_duplicates(data):
                 merge(d,a)
         return d
     sift_data = {}
+    
+    KP_TH = 70
+    KP_TH_LOW = 50
     def images_are_similar(a,b):
         kp_1, desc_1 = sift_data[a[0]]
         kp_2, desc_2 = sift_data[b[0]]
         if len(kp_1)<2 or len(kp_2)<2:
-            return False
+            return 0,0
         matches = G_BF.knnMatch(desc_1,desc_2, k=2)
         good_points = []
         for m,n in matches:
-            if m.distance <.75*n.distance:
+            if m.distance <.7*n.distance: # lower ratio is stricter.
                 good_points.append(m)
         number_keypoints = max(len(kp_1),len(kp_2))
-        return len(good_points)/number_keypoints > .65
+        # if len(good_points)/number_keypoints > .65 and  '1623332632019.png' in (a[0].name,b[0].name):
+            # print('similar with',len(good_points),number_keypoints,'kps',len(good_points)/number_keypoints,'to',b[0].name)
+        return len(good_points)/number_keypoints,number_keypoints
 
     im = [(p,cv2.imread(str(p))) for p in paths]
     imsize = im[0][1].shape[0]*im[0][1].shape[1]
     # hist_data = {a[0]:cv2.calcHist(a[1], list(range(3)), None, [50,50,50], [0,256]+[0,256]+[0,256], accumulate=False) for a in im}
+    
+    
     set1 = [(i[0],cv2.cvtColor(i[1], cv2.COLOR_BGR2GRAY)) for i in im]
-    edges = [cv2.Canny(a[1],50,150,apertureSize = 3) for a in set1] 
+    # edges = [cv2.Canny(a[1],50,150,apertureSize = 3) for a in set1] 
+    # contours = [cv2.findContours(ed,cv2.RETR_TREE,cv2.CHAIN_APPROX_NONE)[0] for ed in edges]
+    # cntareas = [sum(map(cv2.contourArea,cnts)) for cnts in contours]
+    # cntpercents = [c/imsize for c in cntareas]
+    # set1 = [v for i,v in enumerate(set1) if cntpercents[i]>.08 and len(contours[i])>3]
+    # set1 = [v for i,v in enumerate(set1) if cntpercents[i]>.06 and len(contours[i])>3]
+    # set1 = [v for i,v in enumerate(set1) if len(contours[i])>3]
+    
+
+    lower_gray = np.array([0,0,100]) # 95 works but leave some leeway
+    upper_gray = np.array([255,255,255])
+    hsv = [cv2.cvtColor(i[1], cv2.COLOR_BGR2HSV) for i in im]
+    grays = [cv2.inRange(cv2.blur(a,(7,7)), lower_gray, upper_gray) for a in hsv]
+    edges = [cv2.Canny(a,50,150,apertureSize = 3) for a in grays] 
     contours = [cv2.findContours(ed,cv2.RETR_TREE,cv2.CHAIN_APPROX_NONE)[0] for ed in edges]
-    cntareas = [sum(map(cv2.contourArea,cnts)) for cnts in contours]
-    cntpercents = [c/imsize for c in cntareas]
-    set1 = [v for i,v in enumerate(set1) if cntpercents[i]>.08 and len(contours[i])>3]
-    # sift = cv2.SIFT_create()
+    cntminxs = [cv2.boundingRect(min(c, key = lambda x: cv2.boundingRect(x)[0]))[0] if c else 0 for c in contours]
+    set1 = [(i[0],cv2.warpAffine(i[1], np.float32([[1,0,-cntminxs[idx]],[0,1,0]]), (i[1].shape[1], i[1].shape[0]))) for idx,i in enumerate(set1)]
+    
+    # d = im[0][1].copy()
+    
+    # cv2.imshow('c',transformedimages[0][1])
+    # cv2.waitKey()
+    # print('found',len(contours[0]),'contours')
+    # c = min(contours[0], key = lambda x: cv2.boundingRect(x)[0])
+    # # for c in contours[0]:
+    # x,y,w,h = cv2.boundingRect(c)
+    # cv2.rectangle(d,(x,y),(x+w,y+h),(200,200,200),2)
+    
+    # #transform image to line up with contour
+    # matrix = [[1,0,-x],
+              # [0,1,0]]
+    # t = np.float32(matrix)
+    # h, w = im[0][1].shape[:2]
+    # d = cv2.warpAffine(d, t, (w, h))
+    
+    # cv2.imshow('c',d)
+    # cv2.waitKey()
+    # exit()
+    
+    # filter set of images then gen sift data
+    # sift_data = {a[0]:G_SIFT.detectAndCompute(unsharp_mask(a[1]), None) for a in set1}
     sift_data = {a[0]:G_SIFT.detectAndCompute(a[1], None) for a in set1}
-    set2 = [(i[0],i[1].copy()) for i in set1]
-    # hsv = [(i[0],cv2.blur(cv2.cvtColor(i[1], cv2.COLOR_BGR2HSV),(7,7))) for i in im]
+    
+    
+    # dupes = [a for a in set1 if a[0].name in ('1626298768237.png','1627344552523.png')]
+    # dupes = [a for a in set1 if a[0].name in ('1626413456716.png','1626776973041.png')]
+    # dupes = [a for a in set1 if a[0].name in ('1626277927333.png','1626754282586.png')]
+    # dupes = [a for i,a in enumerate(set1) if a[0].name in ('1627193775955.jpg','1626783169245.png')]
+    # dupes = [a for i,a in enumerate(set1) if a[0].name in ('1626427723017.png','1627193775955.jpg')]
+    # dupes = [a for i,a in enumerate(set1) if a[0].name in ('1627006712830.png','1626450296491.jpg')]
+    
+    # cv2.imshow('1',dupes[0][1])
+    # cv2.imshow('2',dupes[1][1])
+    # print(images_are_similar(dupes[0],dupes[1]))
+    # cv2.waitKey()
+    # exit()
+    # for i in dupes:
+        # cv2.imshow('db',i[1])
+        # cv2.waitKey()
+    # exit()
+    
     
     groups = {}
+    sim_map = {}
+    HIGH_TH = .6
+    # LOW_TH = .6
     
     # inefficient but luckily not too slow since images are small.
-    for i,a in enumerate(set1):
-        for b in set2:
-            if a[0].name != b[0].name and images_are_similar(a,b):
-                groups.setdefault(a[0],[]).append(b[0])
-                groups.setdefault(b[0],[]).append(a[0])
+    for a,b in itertools.combinations(set1,2):
+        score,kpcount = images_are_similar(a,b)
+        sim_map[a[0].name+b[0].name] = (score,kpcount)
+        if score > HIGH_TH and kpcount > KP_TH_LOW:
+            groups.setdefault(a[0],[]).append(b[0])
+            groups.setdefault(b[0],[]).append(a[0])
     grouped = []
     for k in list(groups.keys()):
         if k in groups:
             a = groups[k]
             del groups[k]
             grouped.append(merge(set([k]),a))
+    print('TOTAL DUPES FOUND:',sum([len(v) for v in grouped]))
     for i,g in enumerate(grouped):
         dupes = sorted(g,key=lambda x: x.name.split('.')[0])#[:-1]
+        com = [sim_map.get(a.name+b.name, sim_map.get(b.name+a.name,[0]))[0]>HIGH_TH for a,b in itertools.combinations(dupes,2)]
+        if not (all(com)):# or dupes[-1].name == '1626754282586.png':
+            sums = {}
+            scores = {}
+            kpcount = []
+            for a,b in itertools.combinations(dupes,2):
+                sc,kps = sim_map.get(a.name+b.name, sim_map.get(b.name+a.name,[0,0]))
+                kpcount.append(kps)
+                sums.setdefault(a.name,[]).append(sc)
+                sums.setdefault(b.name,[]).append(sc)
+            for k,v in sums.items():
+                scores[k] = sum(v)/len(v)
+                # try using median isntead of mean score.
+                # scores[k] = statistics.median(v)
+                # print(v,scores[k])
+            
+            avg_kps = sum(kpcount)/len(kpcount)
+            # print('avsc',sum(scores.values())/len(scores),sum(scores.values())/len(scores)-min(scores.values()))
+            # print('med',statistics.median(scores.values()),max(scores.values())-min(scores.values()))
+            # print('sd',statistics.stdev(scores.values()),statistics.harmonic_mean(scores.values()))
+            if avg_kps < KP_TH:
+                # trash this entire set, its probably blacked out names
+                # print('throwing out due to low kp avg',avg_kps,dupes[-1].name)
+                continue
+            # med_mod = statistics.median(scores.values()) - (max(scores.values())-min(scores.values()))/2
+            mean_mod = statistics.harmonic_mean(scores.values()) - statistics.stdev(scores.values())*1.5
+            # filter out any with avg score below LOW_TH
+            dupes = [d for d in dupes if scores[d.name] >= mean_mod]
+            # print('not all match for ',dupes[-1].name,'filtering those below',mean_mod)
+            # print(scores)
         [archiveClear(d.name, dupes[-1].name) for d in dupes[:-1]]
 
 def createThumbs():
@@ -512,7 +624,7 @@ def match_op(roi):
         print('match below th:', res[0][0],res[0][2].name)
         print('insted used',sorted(options,key=lambda x: x[0],reverse=True)[:5])
     best = sorted(options,key=lambda x: x[0],reverse=True)[0]
-    if best[0] > .11:
+    if best[0] > .108: # .11 failed on this single image: -cc4clear/1626719849150.jpg, .105 fails in another way.
         return best
     # check aspect ratio, if too thin assume blank
     if abs(roi.shape[1]/roi.shape[0] - OP_ASPECT_RATIO) > .3:
@@ -539,12 +651,14 @@ def quick_crop(im):
 def parse_squad(path, save_images = True):
     # return list of ops in a card image
     # also generates extra images: cropped image, doctor and risk image
+    INTERPOLATION = cv2.INTER_AREA
+    INTERPOLATION_ENLARGE = cv2.INTER_CUBIC
     template = cv2.cvtColor(cv2.imread(str(blankTemplate)), cv2.COLOR_BGR2GRAY)
     oim = cv2.imread(str(path))
     if DEBUG:
         cv2.imshow('orig',oim)
         cv2.waitKey()
-    print(f'processing {path.name}...')
+    print(f'processing {path}...')
     # initial cropping, handles most cases
     oim = quick_crop(oim)
     oim = crop_titlebar(oim)
@@ -553,8 +667,13 @@ def parse_squad(path, save_images = True):
     if DEBUG:
         cv2.imshow('cropped',oim)
         cv2.waitKey()
+        
+    h,w = oim.shape[:2]
     # scale to 720
-    im = cv2.resize(oim, (int(720/oim.shape[0]*oim.shape[1]),720), interpolation = cv2.INTER_AREA)
+    if h < 720:
+        im = cv2.resize(oim, (int(720/oim.shape[0]*oim.shape[1]),720), interpolation = INTERPOLATION_ENLARGE)
+    else:
+        im = cv2.resize(oim, (int(720/oim.shape[0]*oim.shape[1]),720), interpolation = INTERPOLATION)
     im_gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
 
     # get coordinates of a "Blank" operator.
@@ -562,11 +681,14 @@ def parse_squad(path, save_images = True):
     if not right_coords:
         #probably failed because image is of "tall" variety, try to crop extra space off top & bottom
         # crop by assume 16:9 and crop center 
-        h,w = oim.shape[:2]
         # crop to 16:9 first
         height_mod = int((h-(w/16*9)) / 2)
         oim = oim[height_mod:h-height_mod,:]
-        im = cv2.resize(oim, (int(720/oim.shape[0]*oim.shape[1]),720), interpolation = cv2.INTER_AREA)
+        h,w = oim.shape[:2]
+        if h < 720:
+            im = cv2.resize(oim, (int(720/oim.shape[0]*oim.shape[1]),720), interpolation = INTERPOLATION_ENLARGE)
+        else:
+            im = cv2.resize(oim, (int(720/oim.shape[0]*oim.shape[1]),720), interpolation = INTERPOLATION)
         im_gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
         wrong_width,right_coords = get_rightmost_blank(im_gray,template,force=False)
     rect = None
@@ -716,13 +838,11 @@ def parse_squad(path, save_images = True):
     if DEBUG or SHOW_RES:
         result_disp = result_disp[:,0:max(1280,crop_border)]
     if im.shape[1] > 1280:
-        im=cv2.resize(im, (1280,720), interpolation = cv2.INTER_AREA)
+        im=cv2.resize(im, (1280,720), interpolation = INTERPOLATION)
         if DEBUG or SHOW_RES:
-            result_disp=cv2.resize(result_disp, (1280,720), interpolation = cv2.INTER_AREA)
+            result_disp=cv2.resize(result_disp, (1280,720), interpolation = INTERPOLATION)
  
-    if DEBUG or SHOW_RES:
-        cv2.imshow(path.name,result_disp)
-        cv2.waitKey()
+
     SQUADS[path.name] = operator_list
     if save_images:
         cv2.imwrite(str(cropDir.joinpath(path.name)),im)
@@ -732,10 +852,25 @@ def parse_squad(path, save_images = True):
         risk = im[int(height*risk_coords[0]):int(height*(risk_coords[1])), int(height*risk_coords[2]):int(height*(risk_coords[3]))]
         cv2.imwrite(str(riskDir.joinpath(path.name)),risk)
 
-        nickname_coords = (.37,.41,.2,.5)
+        nickname_coords = (.37,.41,.2,.5) # y1, y2, x1, x2, multiply all by image height.
+        nickname_coords = (.37,.41,.166,.43)
+        nickname_coords = (.351,.433,.166,.486)
+        nickname_coords = (260/720,305/720,130/720,330/720)
+        # nickname_coords = (255/720,310/720,130/720,330/720)
         height, width = im.shape[:2]
+        
+        nn_box = (int(height*nickname_coords[2]),int(height*nickname_coords[0]),int(height*nickname_coords[3]),int(height*nickname_coords[1]))
+        
+        if SHOW_RES or DEBUG:
+            cv2.rectangle(result_disp,(nn_box[0],nn_box[1]),(nn_box[2],nn_box[3]),(200,200,0),2)
+        
         nn = im[int(height*nickname_coords[0]):int(height*(nickname_coords[1])), int(height*nickname_coords[2]):int(height*(nickname_coords[3]))]
         cv2.imwrite(str(doctorDir.joinpath(path.name)),nn)
+        
+    if DEBUG or SHOW_RES:
+        cv2.imshow(path.name,result_disp)
+        cv2.waitKey()
+        cv2.imwrite('./example_out.png',result_disp)
     return operator_list
     
     
@@ -870,6 +1005,7 @@ def _generate_avatar_data(rebuild_all=False):
 DEBUG = False
 SHOW_RES = False
 DO_ASSERTS = False
+
 if __name__ == '__main__':
     test = None
     paths = list(imagesDir.glob('*.*'))
@@ -881,7 +1017,10 @@ if __name__ == '__main__':
     # test = './images-cc1clear/1606203199640.jpg'
     # test = './images-cc4clear/1627301022848.png'
     # test = './images-cc3clear/1622356297879.png'
-
+    # test = './images-cc4clear/1626269984534.png'
+    # test = './images-cc4clear/1626719849150.jpg'
+    # test = './images-cc2clear/1613049415748.png'
+    # test = './images-cc1clear/1605109000511.jpg'
 
     # DEBUG = True
     # SHOW_RES = True
@@ -896,6 +1035,7 @@ if __name__ == '__main__':
         assert_pairs = pickle.load(f)
     # add new assert tests:
     assert_pairs['./images-cc1clear/1606203199640.jpg']: ['char_180_amgoat_2.png', 'char_112_siege.png', 'char_337_utage_2.png', 'char_133_mm_2.png', 'char_222_bpipe_2.png', 'char_213_mostma_epoque#5.png', 'char_202_demkni.png', 'char_243_waaifu_2.png', 'char_128_plosis_epoque#3.png', 'char_285_medic2.png', 'char_215_mantic_epoque#4.png', 'char_118_yuki_2.png', 'char_151_myrtle.png']
+    assert_pairs['./images-cc4clear/1626719849150.jpg']: ['char_225_haak_2.png', 'char_172_svrash.png', 'char_358_lisa_2.png', 'char_134_ifrit_summer#1.png', 'char_222_bpipe_race#1.png', 'char_311_mudrok_2.png', 'char_350_surtr_2.png', 'char_180_amgoat_2.png', 'char_401_elysm_2.png', 'char_202_demkni_test#1.png', 'char_340_shwaz_snow#1.png', 'char_143_ghost_2.png', 'char_102_texas_2.png']
     with assertTests.open('wb') as f:
         pickle.dump(assert_pairs, f)
     # must do this before anything else
@@ -910,9 +1050,16 @@ if __name__ == '__main__':
                 raise
         print('ALL ASSERTS PASSED'*20)
         exit()
+    if 0:
+        # test dupe finder
+        if TAG != '-ccbclear':
+            with DATA_JSON.open('r') as f:
+                data = json.load(f)
+            remove_duplicates(data)
+        exit()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-        future_to_url = {executor.submit(parse_squad, path): path for path in paths}
+        future_to_url = {executor.submit(parse_squad, path, len(paths)>1): path for path in paths}
         for future in concurrent.futures.as_completed(future_to_url):
             url = future_to_url[future]
             try:
@@ -930,7 +1077,7 @@ if __name__ == '__main__':
     generate_data_json()
     with DATA_JSON.open('r') as f:
         data = json.load(f)
-    if TAG != '-ccb':
+    if TAG != '-ccbclear':
         remove_duplicates(data)
     print('creating thumbnails...')
     createThumbs()
@@ -940,6 +1087,17 @@ if __name__ == '__main__':
     add_extra_data(data)
     with DATA_JSON.open('w') as f:
         json.dump(data,f)
+    calculate_soul(data)
+    with DATA_JSON.open('w') as f:
+        json.dump(data,f)
+        
+    # merge all data files into one combined -cc-all
+    full = {}
+    for path in Path('.').resolve().glob('data-*clear.json'):
+        with path.open('r') as f:
+            dictupdate(full, json.load(f))
+    with open(Path('./data-cc-all.json').resolve(), 'w') as f:
+        json.dump(full, f)
 
 
 # risk parse test

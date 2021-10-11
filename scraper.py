@@ -12,6 +12,7 @@ outputDir.mkdir(exist_ok=True)
 s=Session()
 
 next_page = base_url
+total = 0
 while next_page:
     with s.get(next_page) as r:
         etree = lxmlhtml.fromstring(r.text)
@@ -26,6 +27,7 @@ while next_page:
             new += 1
             with destPath.open('wb') as f:
                 f.write(s.get(imagepath).content)
+                total += 1
             time.sleep(1)
     else:
         if not new and len(images) > 5:
@@ -33,3 +35,5 @@ while next_page:
         time.sleep(2)
         continue
     break
+if total == 0:
+    exit(1)

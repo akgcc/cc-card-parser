@@ -56,7 +56,7 @@ def calculate_soul(data):
         data[k]['soul'] = round(100 * (1 - sum(t) / sum_of_weights), 2)
     return data
 if __name__ == '__main__':
-    for fn in ['data-ccb.json', 'data-cc0clear.json', 'data-cc1clear.json', 'data-cc2clear.json', 'data-cc3clear.json', 'data-cc4clear.json']:
+    for fn in ['data-ccbclear.json', 'data-cc0clear.json', 'data-cc1clear.json', 'data-cc2clear.json', 'data-cc3clear.json', 'data-cc4clear.json']:
         with open(fn,'r') as f:
             res = calculate_soul(json.load(f))
         with open(fn,'w') as f:
