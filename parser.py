@@ -11,6 +11,9 @@ import copyreg
 import pickle
 import itertools
 import statistics
+import copy
+import time
+import requests
 from soul import calculate_soul
 def _pickle_keypoints(point):
     return cv2.KeyPoint, (*point.pt, point.size, point.angle,
@@ -51,6 +54,23 @@ assertTests = Path('./assert_tests.p').resolve()
 # create duplicates folders
 for dir in (cropDir,doctorDir):
     dir.joinpath('duplicates/').mkdir(exist_ok=True)
+    
+# update character_table.json
+def update_char_table():
+    if not charDataPath.exists() or time.time() - charDataPath.stat().st_mtime > 60*60*24:
+        with requests.get('https://raw.githubusercontent.com/Kengxxiao/ArknightsGameData/master/en_US/gamedata/excel/character_table.json') as r:
+            if r.status_code == 200:
+                with charDataPath.open('wb') as f:
+                    f.write(r.content)
+    # add guardmiya
+    with charDataPath.open('rb') as f:
+        data = json.load(f)
+    data['char_1001_amiya2'] = copy.deepcopy(data['char_002_amiya'])
+    data['char_1001_amiya2']['name'] = 'Guardmiya'
+    data['char_1001_amiya2']['profession'] = data['char_350_surtr']['profession']
+    with charDataPath.open('w') as f:
+        json.dump(data, f)
+    
 def dictupdate(d, u):
     if not isinstance(d, collections.abc.Mapping):
         return u
@@ -74,9 +94,9 @@ def generate_data_json():
     with SQUAD_JSON.open('r') as f:
         data = json.load(f)
     for k,v in data.items():
-        # data[k] = {'squad': ['_'.join(i.split('_')[:3]).split('.')[0] for i in v],'group':clear_group(k)}
+        data[k] = {'squad': ['_'.join(i.split('_')[:3]).split('.')[0] for i in v],'group':clear_group(k)}
         # amiya alt does not appear in character_table.json, so we coalesce her to normal amiya.
-        data[k] = {'squad': ["char_002_amiya" if op=="char_1001_amiya2" else op for op in ['_'.join(i.split('_')[:3]).split('.')[0] for i in v]],'group':clear_group(k)}
+        # data[k] = {'squad': ["char_002_amiya" if op=="char_1001_amiya2" else op for op in ['_'.join(i.split('_')[:3]).split('.')[0] for i in v]],'group':clear_group(k)}
     for k in list(data.keys()):
         if not cropDir.joinpath(k).exists() and not cropDir.joinpath('duplicates/').joinpath(k).exists():
             del data[k]
@@ -1007,6 +1027,7 @@ SHOW_RES = False
 DO_ASSERTS = False
 
 if __name__ == '__main__':
+    update_char_table()
     test = None
     paths = list(imagesDir.glob('*.*'))
     # test a random image:
