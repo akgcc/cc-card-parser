@@ -272,6 +272,7 @@ CC_START_DATES = {
 	'-cc2clear': 1612458000, #2021 feb 4 10:00 UTC-7
 	'-cc3clear': 1622221200, #2021 may 28 10:00 UTC-7
 	'-cc4clear': 1626195600, #2021 july 13 10:00 UTC-7
+    '-cc5clear': 1636650000, #2021 nov 11 10:00 UTC-7
 	# server reset and therefore week 2 is at 0400 UTC-7
 }
 CCSTART = CC_START_DATES.get(TAG,0)
