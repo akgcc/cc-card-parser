@@ -36,4 +36,4 @@ while next_page:
         continue
     break
 if total == 0:
-    exit(1)
+    exit(0)

@@ -50,6 +50,7 @@ thumbsDir.mkdir(exist_ok=True)
 avatarDir=Path('./avatars/').resolve()
 blankTemplate = Path('./BLANK_720.png').resolve()
 charDataPath = Path('./character_table.json').resolve()
+failedParses = Path('./FAILED_PARSES.json').resolve()
 assertTests = Path('./assert_tests.p').resolve()
 # create duplicates folders
 for dir in (cropDir,doctorDir):
@@ -89,6 +90,14 @@ def add_extra_data(data):
             v['opcount'] = len(v['squad'])
         except:
             print(k,v)
+    data = bubble_duplicates(data)
+    return data
+def bubble_duplicates(data):
+    for k,v in data.items():
+        if 'duplicate_of' not in v:
+            continue
+        while v['duplicate_of'] in data and 'duplicate_of' in data[v['duplicate_of']]:
+            v['duplicate_of'] = data[v['duplicate_of']]['duplicate_of']
     return data
 def generate_data_json():
     with SQUAD_JSON.open('r') as f:
@@ -704,14 +713,15 @@ def parse_squad(path, save_images = True):
         # crop by assume 16:9 and crop center 
         # crop to 16:9 first
         height_mod = int((h-(w/16*9)) / 2)
-        oim = oim[height_mod:h-height_mod,:]
-        h,w = oim.shape[:2]
-        if h < 720:
-            im = cv2.resize(oim, (int(720/oim.shape[0]*oim.shape[1]),720), interpolation = INTERPOLATION_ENLARGE)
-        else:
-            im = cv2.resize(oim, (int(720/oim.shape[0]*oim.shape[1]),720), interpolation = INTERPOLATION)
-        im_gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-        wrong_width,right_coords = get_rightmost_blank(im_gray,template,force=False)
+        if height_mod > 0:
+            oim = oim[height_mod:h-height_mod,:]
+            h,w = oim.shape[:2]
+            if h < 720:
+                im = cv2.resize(oim, (int(720/oim.shape[0]*oim.shape[1]),720), interpolation = INTERPOLATION_ENLARGE)
+            else:
+                im = cv2.resize(oim, (int(720/oim.shape[0]*oim.shape[1]),720), interpolation = INTERPOLATION)
+            im_gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+            wrong_width,right_coords = get_rightmost_blank(im_gray,template,force=False)
     rect = None
     for i in range(5):
         if right_coords:
@@ -729,7 +739,12 @@ def parse_squad(path, save_images = True):
             break
             # with open('near_failures.txt','a') as f:
                 # f.write(str(path))
-
+                
+    # if rect == None this is a failed parse.
+    if rect == None:
+        with failedParses.open('a') as f:
+            f.write(str(path)+'\n')
+        return None
     startX, startY, endX, endY = rect[0],rect[1],rect[0]+rect[2],rect[1]+rect[3]
     h,w = rect[3],rect[2]
     # 130x156
@@ -1043,7 +1058,8 @@ if __name__ == '__main__':
     # test = './images-cc4clear/1626719849150.jpg'
     # test = './images-cc2clear/1613049415748.png'
     # test = './images-cc1clear/1605109000511.jpg'
-
+    # test = './images-cc5clear/1636642844861.jpg' # sunglasses failed
+    # test = './images-cc5clear/1636882207237.png' # joker edit
     # DEBUG = True
     # SHOW_RES = True
     # DO_ASSERTS = True

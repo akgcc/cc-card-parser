@@ -1,1 +1,8 @@
-{}
+{
+"1636642844861.jpg": {"squad": ["char_291_aglina","char_143_ghost","char_129_bluep","char_298_susuro","char_151_myrtle","char_258_podego","char_350_surtr","char_003_kalts"]},
+"1636766524910.jpg": {"squad": ["char_1012_skadi2","char_1001_amiya2","char_456_ash","char_254_vodfox","char_151_myrtle","char_293_thorns","char_350_surtr","char_179_cgbird","char_017_huang","char_362_saga"]},
+"1636677206121.jpg": {"duplicate_of": "1636815552818.jpg"},
+"1636659481932.png": {"duplicate_of": "1636700070285.png"},
+"1636700048659.png": {"duplicate_of": "1636861724564.png"},
+"1636781300683.png": {"duplicate_of": "1636860101973.png"}
+}
