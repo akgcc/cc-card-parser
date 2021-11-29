@@ -1,8 +1,22 @@
 {
 "1636642844861.jpg": {"squad": ["char_291_aglina","char_143_ghost","char_129_bluep","char_298_susuro","char_151_myrtle","char_258_podego","char_350_surtr","char_003_kalts"]},
 "1636766524910.jpg": {"squad": ["char_1012_skadi2","char_1001_amiya2","char_456_ash","char_254_vodfox","char_151_myrtle","char_293_thorns","char_350_surtr","char_179_cgbird","char_017_huang","char_362_saga"]},
+"1637175441907.png": {"squad": ["char_391_rosmon", "char_237_gravel", "char_311_mudrok", "char_134_ifrit", "char_401_elysm", "char_102_texas", "char_202_demkni", "char_291_aglina", "char_151_myrtle", "char_376_therex", "char_180_amgoat", "char_400_weedy", "char_222_bpipe"]},
+"1637274799490.jpg": {"squad": ["char_225_haak", "char_222_bpipe", "char_291_aglina", "char_350_surtr", "char_401_elysm", "char_376_therex", "char_172_svrash", "char_459_tachak", "char_151_myrtle", "char_102_texas", "char_003_kalts", "char_400_weedy", "char_1012_skadi2"]},
 "1636677206121.jpg": {"duplicate_of": "1636815552818.jpg"},
 "1636659481932.png": {"duplicate_of": "1636700070285.png"},
 "1636700048659.png": {"duplicate_of": "1636861724564.png"},
-"1636781300683.png": {"duplicate_of": "1636860101973.png"}
+"1636861724564.png": {"duplicate_of": "1637035917235.png"},
+"1636915032485.png": {"duplicate_of": "1636937248660.png"},
+"1636781300683.png": {"duplicate_of": "1636860101973.png"},
+"1636700070285.png": {"duplicate_of": "1637151129838.png"},
+"1636965096103.png": {"duplicate_of": "1637404541185.png"},
+"1636685344895.png": {"duplicate_of": "1637709806852.png"},
+"1637151129838.png": {"duplicate_of": "1637724502251.png"},
+"1636842078412.png": {"group": 0},
+"1637547226425.jpg": {"group": 0},
+"1637228847958.png": {"group": 0},
+"1637435297232.png": {"group": 1},
+"1637111213168.png": {"group": 0}
+
 }
