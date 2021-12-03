@@ -140,8 +140,11 @@ def calculate_soul_test(data):
 def calculate_soul(data):
     # total = len(data) # this was incorrectly here.
     tally = {}
-    data_copy = deepcopy(data)
-    for k,v in data.items():
+    data_stripped = deepcopy(data)
+    for k,v in data_stripped.items():
+        v['squad'] = [x['name'] for x in v['squad']]
+    data_copy = deepcopy(data_stripped)
+    for k,v in data_stripped.items():
         if 'duplicate_of' in v:
             data_copy[v['duplicate_of']]['squad'] = list( set(data_copy[v['duplicate_of']]['squad']) | set(v['squad']) )
             del data_copy[k]
@@ -170,9 +173,9 @@ def calculate_soul(data):
     MED_H = statistics.median_high(uniqueness.values())
     print('mean:',statistics.harmonic_mean(uniqueness.values()))
     print('max:',max(uniqueness.values()))
-    print('percentile',np.percentile([a for a in uniqueness.values() if a>MED_H], 75))
+    # print('percentile',np.percentile([a for a in uniqueness.values() if a>MED_H], 75))
     # print(uniqueness.values())
-    SD = statistics.stdev(uniqueness.values())
+    SD = statistics.stdev(uniqueness.values()) or .0001
     MED = statistics.median_grouped(uniqueness.values())
     MED = max(uniqueness.values()) / 2
     weights = {k:abs(v-MED)/SD for k,v in uniqueness.items()}
@@ -180,9 +183,9 @@ def calculate_soul(data):
     for k,v in data.items():
         # t= [(uniqueness[c],)*int((1-uniqueness[c])/.2 + 1) for c in v['squad']]
         # t = list(sum(t, ())) # flatten
-        
-        t = [uniqueness[c]*weights[c] for c in v['squad']]
-        sum_of_weights = sum([weights[k] for k in v['squad']])
+        squad = [x['name'] for x in v['squad']]
+        t = [uniqueness[c]*weights[c] for c in squad]
+        sum_of_weights = sum([weights[k] for k in squad])
 
         # squad_score = max([core_sets[s] for s in powerset(v['squad'],(3,5))],default=0)
         # print(sum(t))

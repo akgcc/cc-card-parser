@@ -31,12 +31,16 @@ HIST_CHANNELS = list(range(len(HIST_SIZE)))
 MAX_BAR_WIDTH = .065#% of image width; widest ive seen was 6.1%
 MAX_TITLEBAR_HEIGHT = .05# % of image height
 OP_ASPECT_RATIO = 130/156
+SKILL_ICON_SIZE = 34/720 # at 720p
 TAG = sys.argv[1]
-SQUAD_JSON = Path(f'squads{TAG}.json').resolve()
 SQUADS = {}
-DATA_JSON = Path(f'data{TAG}.json').resolve()
-DATA_FIXES_JSON=Path(f'data{TAG}-fixes.json').resolve()
-DATA_DUPE_FIXES_JSON=Path(f'data{TAG}-dupes.json').resolve()
+
+JSON_DIR = Path('./json/').resolve()
+SQUAD_JSON = JSON_DIR.joinpath(f'squads{TAG}.json')
+DATA_JSON = JSON_DIR.joinpath(f'data{TAG}.json')
+DATA_FIXES_JSON = JSON_DIR.joinpath(f'data{TAG}-fixes.json')
+DATA_DUPE_FIXES_JSON = JSON_DIR.joinpath(f'data{TAG}-dupes.json')
+SKILL_ICON_FIXES_JSON = JSON_DIR.joinpath('skill_icon_map.json')
 doctorDir=Path(f'./doctors{TAG}/').resolve()
 # shutil.rmtree(doctorDir) # delete entire doctor dir to remove residual images
 doctorDir.mkdir(exist_ok=True)
@@ -51,6 +55,7 @@ imagesDir.mkdir(exist_ok=True)
 thumbsDir=Path(f'./thumbs{TAG}/').resolve()
 thumbsDir.mkdir(exist_ok=True)
 avatarDir=Path('./avatars/').resolve()
+skillDir=Path('./skills/').resolve()
 blankTemplate = Path('./BLANK_720.png').resolve()
 charDataPath = Path('./character_table.json').resolve()
 failedParses = Path('./FAILED_PARSES.json').resolve()
@@ -72,6 +77,10 @@ def update_char_table():
     data['char_1001_amiya2'] = copy.deepcopy(data['char_002_amiya'])
     data['char_1001_amiya2']['name'] = 'Guardmiya'
     data['char_1001_amiya2']['profession'] = data['char_350_surtr']['profession']
+    data['char_1001_amiya2']['skills'] = data['char_1001_amiya2']['skills'][:2]
+    data['char_1001_amiya2']['skills'][0]['skillId'] = 'skchr_amiya2_1'
+    data['char_1001_amiya2']['skills'][1]['skillId'] = 'skchr_amiya2_2'
+    
     with charDataPath.open('w') as f:
         json.dump(data, f)
     
@@ -85,14 +94,12 @@ def dictupdate(d, u):
             d[k] = v
     return d
 def add_extra_data(data):
-    with charDataPath.open('rb') as f:
-        chardata = json.load(f)
     for k,v in data.items():
         try:
-            v['avgRarity'] = round(sum([chardata[c]['rarity'] for c in v['squad']])/len(v['squad'])+1,3)
+            v['avgRarity'] = round(sum([CHAR_DATA[c['name']]['rarity'] for c in v['squad']])/len(v['squad'])+1,3)
             v['opcount'] = len(v['squad'])
         except:
-            print(k,v)
+            print('ERROR ADDING EXTRA DATA',k,v)
     data = bubble_duplicates(data)
     return data
 def bubble_duplicates(data):
@@ -111,9 +118,7 @@ def generate_data_json():
     with SQUAD_JSON.open('r') as f:
         data = json.load(f)
     for k,v in data.items():
-        data[k] = {'squad': ['_'.join(i.split('_')[:3]).split('.')[0] for i in v[0]],'group':clear_group(k),'support':'_'.join(v[1].split('_')[:3]).split('.')[0] if v[1] else v[1]}
-        # amiya alt does not appear in character_table.json, so we coalesce her to normal amiya.
-        # data[k] = {'squad': ["char_002_amiya" if op=="char_1001_amiya2" else op for op in ['_'.join(i.split('_')[:3]).split('.')[0] for i in v]],'group':clear_group(k)}
+        data[k] = {'squad': [{'name': '_'.join(i[0].split('_')[:3]).split('.')[0], 'skill': i[1]} for i in v[0]],'group':clear_group(k),'support':{'name': '_'.join(v[1][0].split('_')[:3]).split('.')[0], 'skill': v[1][1]} if v[1] else {'name':None}}
     for k in list(data.keys()):
         if not cropDir.joinpath(k).exists() and not cropDir.joinpath('duplicates/').joinpath(k).exists():
             del data[k]
@@ -719,7 +724,34 @@ def match_op(roi):
     if abs(roi.shape[1]/roi.shape[0] - OP_ASPECT_RATIO) > .3:
         return 1,BLANK_NAME
     return res[0][0],res[0][2].name
-
+def match_skill(opimg, opname, full_img_height):
+    ' return skill # 1-3 or 0 if no skill or invalid operator '
+    opkey = '_'.join(opname.split('_')[:3]).split('.')[0]
+    if opkey not in CHAR_DATA:
+        return 0
+    best,skill = 0,0
+    for i,skname in enumerate([v['skillId'] for v in CHAR_DATA[opkey]['skills']]):
+        # scale img based on height
+        # s = int(opimg.shape[0]*34/156)
+        s = int(SKILL_ICON_SIZE * full_img_height)
+        template = cv2.resize(SKILL_ICONS[skname], (s,s), interpolation = cv2.INTER_AREA)
+        res = cv2.matchTemplate(opimg,template,cv2.TM_CCOEFF_NORMED)
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+        if max_val > best:
+            best = max_val
+            skill = i+1
+    if best < .45:
+        # match again with middle of template.
+        for i,skname in enumerate([v['skillId'] for v in CHAR_DATA[opkey]['skills']]):
+            s = int(SKILL_ICON_SIZE * full_img_height)
+            template = cv2.resize(SKILL_ICONS[skname], (s,s), interpolation = cv2.INTER_AREA)
+            template = template[template.shape[0]*1//5:template.shape[0]*4//5, template.shape[0]*1//5:template.shape[0]*4//5]
+            res = cv2.matchTemplate(opimg,template,cv2.TM_CCOEFF_NORMED)
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+            if max_val > best:
+                best = max_val
+                skill = i+1
+    return skill
 def quick_crop(im):
     # crop out black bars
     hsv = cv2.cvtColor(im, cv2.COLOR_BGR2HSV) # this conversion fails on some images, just ignore bars in this case
@@ -873,10 +905,11 @@ def parse_squad(path, save_images = True):
             new_x, new_y = box[:2]
             if box[0] >= im.shape[1]:
                 #ENTIRE op is out of bounds, mark this as blank
-                matches.append((0,BLANK_NAME,r))
+                matches.append((0,BLANK_NAME,r,0))
             else:
-                score,name = (match_op(im[max(box[1],0):box[1]+h,box[0]:box[0]+w]))
-                matches.append((score,name,r))
+                op_img = im[max(box[1],0):box[1]+h,box[0]:box[0]+w]
+                score,name = (match_op(op_img))
+                matches.append((score,name,r,match_skill(op_img, name, im.shape[0])))
                 if DEBUG or SHOW_RES:
                     cv2.putText(result_disp, name[5:-4], (new_x,new_y+h//3+c*25), cv2.FONT_HERSHEY_SIMPLEX, 
                     .7, (255, 255,0), 2, cv2.LINE_AA)
@@ -891,17 +924,17 @@ def parse_squad(path, save_images = True):
                 #if blank was found above an op (impossible state) then this col is invalid.
                 break
         else:
-            for score,name,row in matches:
+            for score,name,row,skill in matches:
                 # if score > .7:
                     # blankcnt = 4
                     # break
                 if name == BLANK_NAME:
                     blankcnt+=1
                 else:
-                    col_ops.append((row,name))
+                    col_ops.append((row,name,skill))
             if (not first_row_found) and len(col_ops)==1:
                 try:
-                    support_op = [x[1] for x in col_ops if x[0]>=3][0]
+                    support_op = [x[1:3] for x in col_ops if x[0]>=3][0]
                 except IndexError:
                     pass
             rows_remaining -= 1
@@ -926,7 +959,7 @@ def parse_squad(path, save_images = True):
                         rows_remaining = 2
                         low_op_clear = True
             if first_row_found:
-                operator_list += [x[1] for x in col_ops]
+                operator_list += [x[1:3] for x in col_ops]
             c += 1
             continue
         break
@@ -1108,6 +1141,23 @@ DO_ASSERTS = False
 
 if __name__ == '__main__':
     update_char_table()
+    with charDataPath.open('rb') as f:
+        CHAR_DATA = json.load(f)
+    SKILL_ICONS = {}
+    for sk in skillDir.glob('skill_*.png'):
+        SKILL_ICONS[sk.name[11:-4]] = cv2.imread(str(sk))
+    
+    # fix for broken skill icons:
+    with SKILL_ICON_FIXES_JSON.open('r') as f:
+        skmap = json.load(f)
+    for k,v in skmap.items():
+        SKILL_ICONS[k] = SKILL_ICONS.get(k, SKILL_ICONS[v])
+
+    # for char in CHAR_DATA:
+        # for sk in CHAR_DATA[char]['skills']:
+            # if sk['skillId'] not in SKILL_ICONS:
+                # print(sk['skillId'])
+    # exit()
     test = None
     paths = list(imagesDir.glob('*.*'))
     # test a random image:
@@ -1187,7 +1237,6 @@ if __name__ == '__main__':
     print('removing dupes...')
     if TAG != '-ccbclear':
         remove_duplicates(data)
-    
     print('parsing risks...')
     parse_risks(data)
     fix_json_data(data)
@@ -1195,6 +1244,7 @@ if __name__ == '__main__':
     with DATA_JSON.open('w') as f:
         json.dump(data,f)
     calculate_soul(data)
+    
     print('cleaning output dirs')
     clean_output_folders(data)
     with DATA_JSON.open('w') as f:
@@ -1202,10 +1252,10 @@ if __name__ == '__main__':
         
     # merge all data files into one combined -cc-all
     full = {}
-    for path in Path('.').resolve().glob('data-*clear.json'):
+    for path in JSON_DIR.glob('data-*clear.json'):
         with path.open('r') as f:
             dictupdate(full, {k:dict(v,**{'tag':path.name[4:].split('.')[0]}) for k,v in json.load(f).items()})
-    with open(Path('./data-cc-all.json').resolve(), 'w') as f:
+    with open(JSON_DIR.joinpath('./data-cc-all.json'), 'w') as f:
         json.dump(full, f)
 
 
