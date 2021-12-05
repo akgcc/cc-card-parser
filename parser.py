@@ -34,7 +34,8 @@ OP_ASPECT_RATIO = 130/156
 SKILL_ICON_SIZE = 34/720 # at 720p
 TAG = sys.argv[1]
 SQUADS = {}
-
+OUTPUT_IMG_QUALITY = 80
+OUTPUT_IMG_TYPE = '.jpg' # need to replace instances of IMWRITE_JPEG_QUALITY if you change this
 JSON_DIR = Path('./json/').resolve()
 SQUAD_JSON = JSON_DIR.joinpath(f'squads{TAG}.json')
 DATA_JSON = JSON_DIR.joinpath(f'data{TAG}.json')
@@ -112,7 +113,7 @@ def bubble_duplicates(data):
 def clean_output_folders(data):
     for dir in (cropDir,doctorDir,thumbsDir,riskDir):
         for file in dir.glob('*.*'):
-            if file.name not in data:
+            if file.with_suffix(OUTPUT_IMG_TYPE).name not in data:
                 file.unlink()
 def generate_data_json():
     with SQUAD_JSON.open('r') as f:
@@ -220,7 +221,8 @@ def parse_risks(data):
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
         contours, hierarchy = cv2.findContours(mask,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
-            data[path.name]['risk'] = 0
+            if path.with_suffix(OUTPUT_IMG_TYPE).name in data:
+                data[path.with_suffix(OUTPUT_IMG_TYPE).name]['risk'] = 0
             continue
         c = max(contours, key = cv2.contourArea)
         x,y,w,h = cv2.boundingRect(c)
@@ -281,10 +283,10 @@ def parse_risks(data):
         risk = int('0'+''.join([str(i[1]) for i in sorted(digits)]))
         if loc_x_diff > 44:# or (risk < 18 or risk > 35):
             risk = int(sorted(digits, key=lambda x: x[2])[-1][1])
-        if path.name in data:
+        if path.with_suffix(OUTPUT_IMG_TYPE).name in data:
             if path.name == testimg:
                 print(risk)
-            data[path.name]['risk'] = risk
+            data[path.with_suffix(OUTPUT_IMG_TYPE).name]['risk'] = risk
     return data
 
 CC_START_DATES = {
@@ -331,23 +333,23 @@ def remove_duplicates(data):
                 file.rename(dir.joinpath(file.name))
             except FileExistsError:
                 file.unlink()
-    def archiveClear(fname, originalName, move_files):
+    def archiveClear(file, originalFile, move_files):
         for dir in (cropDir, thumbsDir):
-            if dir.joinpath(fname).exists():
-                data[fname]['duplicate_of'] = originalName
+            if dir.joinpath(file.name).exists():
+                data[file.name]['duplicate_of'] = originalFile.name
                 # only move dupes that won't be displayed.
                 if move_files:
                     try:
-                        dir.joinpath(fname).rename(dir.joinpath('duplicates/').joinpath(fname))
+                        dir.joinpath(file.name).rename(dir.joinpath('duplicates/').joinpath(file.name))
                     except FileExistsError:
-                        dir.joinpath(fname).unlink()
+                        dir.joinpath(file.name).unlink()
         for dir in (doctorDir, ):
-            oDir = dir.joinpath('duplicates/').joinpath(f'{originalName.split(".")[0]}/')
+            oDir = dir.joinpath('duplicates/').joinpath(originalFile.stem)
             oDir.mkdir(exist_ok=True)
-            if dir.joinpath(fname).exists():
+            if dir.joinpath(file.with_suffix('.png').name).exists():
                 try:
-                    shutil.copy(dir.joinpath(fname) ,oDir.joinpath(fname))
-                    shutil.copy(dir.joinpath(originalName) ,oDir.joinpath(originalName))
+                    shutil.copy(dir.joinpath(file.with_suffix('.png').name) ,oDir.joinpath(file.with_suffix('.png').name))
+                    shutil.copy(dir.joinpath(originalFile.with_suffix('.png').name) ,oDir.joinpath(originalFile.with_suffix('.png').name))
                 except FileExistsError:
                     pass
     paths = list(doctorDir.glob('*.*'))
@@ -508,7 +510,7 @@ def remove_duplicates(data):
             grouped.append(merge(set([k]),a))
     print('TOTAL DUPES FOUND:',sum([len(v) for v in grouped]))
     for i,g in enumerate(grouped):
-        dupes = sorted(g,key=lambda x: x.name.split('.')[0])#[:-1]
+        dupes = sorted(g,key=lambda x: x.stem)# sort by filename, this makes a big assumption that all filenames are timestamps.
         com = [sim_map.get(a.name+b.name, sim_map.get(b.name+a.name,[0]))[0]>HIGH_TH for a,b in itertools.combinations(dupes,2)]
         if not (all(com)) and not [x>1 for x in com]:# or dupes[-1].name == '1626754282586.png':
             sums = {}
@@ -540,19 +542,19 @@ def remove_duplicates(data):
             # print('not all match for ',dupes[-1].name,'filtering those below',mean_mod)
             # print(scores)
         # print([(d.name,data[d.name]['group']) for d in dupes])
-        groups = set([data[dupes[-1].name]['group']])
+        groups = set([data[dupes[-1].with_suffix(OUTPUT_IMG_TYPE).name]['group']])
         for d in dupes[-2::-1]:# reversed but skip first (prev last) element
-            group = data[d.name]['group']
-            archiveClear(d.name, dupes[-1].name, group in groups)
+            group = data[d.with_suffix(OUTPUT_IMG_TYPE).name]['group']
+            archiveClear(d.with_suffix(OUTPUT_IMG_TYPE), dupes[-1].with_suffix(OUTPUT_IMG_TYPE), group in groups)
             groups.add(group)
-        # [archiveClear(d.name, dupes[-1].name) for d in dupes[:-1]]
 
 def createThumbs():
-    for paths in (cropDir.glob('*.*'),cropDir.joinpath('duplicates/').glob('*.*')):
-        for path in paths:
+    # for paths in (cropDir.glob('*.*'),cropDir.joinpath('duplicates/').glob('*.*')):
+        for path in cropDir.glob('*.*'):
             im=cv2.imread(str(path))
             thumb=cv2.resize(im,(295,166), interpolation = cv2.INTER_AREA)
-            cv2.imwrite(str(thumbsDir.joinpath(path.name)),thumb)
+            cv2.imwrite(str(thumbsDir.joinpath(path.name)),thumb,[int(cv2.IMWRITE_JPEG_QUALITY), OUTPUT_IMG_QUALITY])
+            # cv2.imwrite(str(thumbsDir.joinpath(path.name)),thumb,[int(cv2.IMWRITE_WEBP_QUALITY), OUTPUT_IMG_QUALITY])
 def smoothimg(im):
     kernel = np.ones((5,5), np.uint8)
     d = cv2.morphologyEx(im, cv2.MORPH_CLOSE, kernel)
@@ -909,7 +911,7 @@ def parse_squad(path, save_images = True):
             else:
                 op_img = im[max(box[1],0):box[1]+h,box[0]:box[0]+w]
                 expand_by = .5 # 50% but only to the left and bottom, as skill icon is in that corner.
-                op_img_expanded = im[int(max(box[1],0)):int(box[1]+h*(1+expand_by)),int(box[0]-w*expand_by):int(box[0]+w)]
+                op_img_expanded = im[int(max(box[1],0)):int(min(box[1]+h*(1+expand_by),im.shape[0])),int(box[0]-w*expand_by):int(box[0]+w)]
                 score,name = (match_op(op_img))
                 matches.append((score,name,r,match_skill(op_img_expanded, name, im.shape[0])))
                 if DEBUG or SHOW_RES:
@@ -977,15 +979,19 @@ def parse_squad(path, save_images = True):
         if DEBUG or SHOW_RES:
             result_disp=cv2.resize(result_disp, (1280,720), interpolation = INTERPOLATION)
  
-
+    # convert path to correct img type
+    path = path.with_suffix(OUTPUT_IMG_TYPE)
     SQUADS[path.name] = (operator_list,support_op)
     if save_images:
-        cv2.imwrite(str(cropDir.joinpath(path.name)),im)
+        # cv2.imwrite(str(cropDir.joinpath(path.name)),im)
         
+        cv2.imwrite(str(cropDir.joinpath(path.name)),im,[int(cv2.IMWRITE_JPEG_QUALITY), OUTPUT_IMG_QUALITY])
+        # cv2.imwrite(str(cropDir.joinpath(path.name)),im,[int(cv2.IMWRITE_WEBP_QUALITY), OUTPUT_IMG_QUALITY])
+
         risk_coords = (310/720,490/720,90/720,300/720)
         height, width = im.shape[:2]
         risk = im[int(height*risk_coords[0]):int(height*(risk_coords[1])), int(height*risk_coords[2]):int(height*(risk_coords[3]))]
-        cv2.imwrite(str(riskDir.joinpath(path.name)),risk)
+        cv2.imwrite(str(riskDir.joinpath(path.name).with_suffix('.png')),risk)
 
         nickname_coords = (.37,.41,.2,.5) # y1, y2, x1, x2, multiply all by image height.
         nickname_coords = (.37,.41,.166,.43)
@@ -1000,7 +1006,7 @@ def parse_squad(path, save_images = True):
             cv2.rectangle(result_disp,(nn_box[0],nn_box[1]),(nn_box[2],nn_box[3]),(200,200,0),2)
         
         nn = im[int(height*nickname_coords[0]):int(height*(nickname_coords[1])), int(height*nickname_coords[2]):int(height*(nickname_coords[3]))]
-        cv2.imwrite(str(doctorDir.joinpath(path.name)),nn)
+        cv2.imwrite(str(doctorDir.joinpath(path.name).with_suffix('.png')),nn)
         
     if DEBUG or SHOW_RES:
         cv2.imshow(path.name,result_disp)
@@ -1208,12 +1214,14 @@ if __name__ == '__main__':
                 raise
         print('ALL ASSERTS PASSED'*20)
         exit()
-    if 0:
+    if 1:
         # test dupe finder
         if TAG != '-ccbclear':
             with DATA_JSON.open('r') as f:
                 data = json.load(f)
             remove_duplicates(data)
+            # with DATA_JSON.open('w') as f:
+                # json.dump(data,f)
         exit()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
