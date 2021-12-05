@@ -908,8 +908,10 @@ def parse_squad(path, save_images = True):
                 matches.append((0,BLANK_NAME,r,0))
             else:
                 op_img = im[max(box[1],0):box[1]+h,box[0]:box[0]+w]
+                expand_by = .5 # 50% but only to the left and bottom, as skill icon is in that corner.
+                op_img_expanded = im[int(max(box[1],0)):int(box[1]+h*(1+expand_by)),int(box[0]-w*expand_by):int(box[0]+w)]
                 score,name = (match_op(op_img))
-                matches.append((score,name,r,match_skill(op_img, name, im.shape[0])))
+                matches.append((score,name,r,match_skill(op_img_expanded, name, im.shape[0])))
                 if DEBUG or SHOW_RES:
                     cv2.putText(result_disp, name[5:-4], (new_x,new_y+h//3+c*25), cv2.FONT_HERSHEY_SIMPLEX, 
                     .7, (255, 255,0), 2, cv2.LINE_AA)
@@ -1176,7 +1178,8 @@ if __name__ == '__main__':
     
     # test = './images-cc4clear/1626720793105.png' #meteorite recognized as bena.
     # test = './images-cc0clear/1599836698409.jpg' #meteorite recognized as bena.
-    
+    # test = './images-cc3clear/1622437965161.png' # multiple skills wrong
+
     # DEBUG = True
     # SHOW_RES = True
     # DO_ASSERTS = True
