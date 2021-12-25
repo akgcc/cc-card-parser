@@ -44,46 +44,59 @@ DATA_DUPE_FIXES_JSON = JSON_DIR.joinpath(f'data{TAG}-dupes.json')
 SKILL_ICON_FIXES_JSON = JSON_DIR.joinpath('skill_icon_map.json')
 doctorDir=Path(f'./doctors{TAG}/').resolve()
 # shutil.rmtree(doctorDir) # delete entire doctor dir to remove residual images
-doctorDir.mkdir(exist_ok=True)
 cropDir=Path(f'./cropped{TAG}/').resolve()
-cropDir.mkdir(exist_ok=True)
 riskDir=Path(f'./risks{TAG}/').resolve()
-riskDir.mkdir(exist_ok=True)
 numsDir=Path(f'./numberTemplates/').resolve()
-numsDir.mkdir(exist_ok=True)
 imagesDir=Path(f'./images{TAG}/').resolve()
-imagesDir.mkdir(exist_ok=True)
 thumbsDir=Path(f'./thumbs{TAG}/').resolve()
-thumbsDir.mkdir(exist_ok=True)
+
 avatarDir=Path('./avatars/').resolve()
 skillDir=Path('./skills/').resolve()
 blankTemplate = Path('./BLANK_720.png').resolve()
 charDataPath = Path('./character_table.json').resolve()
+crisisDataPath = Path('./crisis_table.json').resolve()
+charDataPatchPath = Path('./char_patch_table.json').resolve()
 failedParses = Path('./FAILED_PARSES.json').resolve()
 assertTests = Path('./assert_tests.p').resolve()
-# create duplicates folders
-for dir in (cropDir,doctorDir,thumbsDir):
-    dir.joinpath('duplicates/').mkdir(exist_ok=True)
+CC_START_DATES = {
+'-ccbclear':1591995600#Friday, June 12, 2020 9:00:00 PM GMT
+}
+
     
-# update character_table.json
+# update character_table.json, and patch with char_patch_table
 def update_char_table():
+    if not crisisDataPath.exists() or time.time() - crisisDataPath.stat().st_mtime > 60*60*24:
+        with requests.get('https://raw.githubusercontent.com/Kengxxiao/ArknightsGameData/master/en_US/gamedata/excel/crisis_table.json') as r:
+            if r.status_code == 200:
+                with crisisDataPath.open('wb') as f:
+                    f.write(r.content)
     if not charDataPath.exists() or time.time() - charDataPath.stat().st_mtime > 60*60*24:
         with requests.get('https://raw.githubusercontent.com/Kengxxiao/ArknightsGameData/master/en_US/gamedata/excel/character_table.json') as r:
             if r.status_code == 200:
                 with charDataPath.open('wb') as f:
                     f.write(r.content)
-    # add guardmiya
+    if not charDataPatchPath.exists() or time.time() - charDataPatchPath.stat().st_mtime > 60*60*24:
+        with requests.get('https://raw.githubusercontent.com/Kengxxiao/ArknightsGameData/master/en_US/gamedata/excel/char_patch_table.json') as r:
+            if r.status_code == 200:
+                with charDataPatchPath.open('wb') as f:
+                    f.write(r.content)
+    
     with charDataPath.open('rb') as f:
         data = json.load(f)
-    data['char_1001_amiya2'] = copy.deepcopy(data['char_002_amiya'])
+    with charDataPatchPath.open('rb') as f:
+        datapatch = json.load(f)
+    dictupdate(data, datapatch['patchChars'])
+    # change guardmiya name
     data['char_1001_amiya2']['name'] = 'Guardmiya'
-    data['char_1001_amiya2']['profession'] = data['char_350_surtr']['profession']
-    data['char_1001_amiya2']['skills'] = data['char_1001_amiya2']['skills'][:2]
-    data['char_1001_amiya2']['skills'][0]['skillId'] = 'skchr_amiya2_1'
-    data['char_1001_amiya2']['skills'][1]['skillId'] = 'skchr_amiya2_2'
-    
     with charDataPath.open('w') as f:
         json.dump(data, f)
+        
+
+    with crisisDataPath.open('rb') as f:
+        crisis_table = json.load(f)
+    for dat in crisis_table['seasonInfo']:
+        num = dat['seasonId'].split('_')[2]
+        CC_START_DATES[f'-cc{num}clear'] = int(dat['startTs'])
     
 def dictupdate(d, u):
     if not isinstance(d, collections.abc.Mapping):
@@ -289,19 +302,19 @@ def parse_risks(data):
             data[path.with_suffix(OUTPUT_IMG_TYPE).name]['risk'] = risk
     return data
 
-CC_START_DATES = {
-	'-ccbclear': 1592002800, #2020 june 12 16:00 UTC-7
-	'-cc0clear': 1599750000, #2020 sept 10 8:00 UTC-7
-	'-cc1clear': 1605114000, #2020 nov 11 10:00 UTC-7
-	'-cc2clear': 1612458000, #2021 feb 4 10:00 UTC-7
-	'-cc3clear': 1622221200, #2021 may 28 10:00 UTC-7
-	'-cc4clear': 1626195600, #2021 july 13 10:00 UTC-7
-    '-cc5clear': 1636650000, #2021 nov 11 10:00 UTC-7
+
+
+# CC_START_DATES = {
+	# '-ccbclear': 1592002800, #2020 june 12 16:00 UTC-7
+	# '-cc0clear': 1599750000, #2020 sept 10 8:00 UTC-7
+	# '-cc1clear': 1605114000, #2020 nov 11 10:00 UTC-7
+	# '-cc2clear': 1612458000, #2021 feb 4 10:00 UTC-7
+	# '-cc3clear': 1622221200, #2021 may 28 10:00 UTC-7
+	# '-cc4clear': 1626195600, #2021 july 13 10:00 UTC-7
+    # '-cc5clear': 1636650000, #2021 nov 11 10:00 UTC-7
 	# server reset and therefore week 2 is at 0400 UTC-7
-}
-CCSTART = CC_START_DATES.get(TAG,0)
-# cc_week_2 = (CCSTART + 604800) - (CCSTART % (60 * 60 * 24)) + 39600
-# cc_day_1 = (CCSTART + 172800) - (CCSTART % (60 * 60 * 24)) + 39600
+# }
+
 def clear_group(fname):
     # 0 == day1, 1 == week1 2==week2
     try:
@@ -1149,6 +1162,17 @@ DO_ASSERTS = False
 
 if __name__ == '__main__':
     update_char_table()
+    if TAG not in CC_START_DATES:
+        print('invalid cc tag')
+        exit(1)
+    for dpath in (doctorDir,cropDir,riskDir,numsDir,imagesDir,thumbsDir):
+        dpath.mkdir(exist_ok=True)
+        # create duplicates folders
+    for dir in (cropDir,doctorDir,thumbsDir):
+        dir.joinpath('duplicates/').mkdir(exist_ok=True)
+    CCSTART = CC_START_DATES.get(TAG,0)
+    # cc_week_2 = (CCSTART + 604800) - (CCSTART % (60 * 60 * 24)) + 39600
+    # cc_day_1 = (CCSTART + 172800) - (CCSTART % (60 * 60 * 24)) + 39600
     with charDataPath.open('rb') as f:
         CHAR_DATA = json.load(f)
     SKILL_ICONS = {}
@@ -1214,7 +1238,7 @@ if __name__ == '__main__':
                 raise
         print('ALL ASSERTS PASSED'*20)
         exit()
-    if 1:
+    if 0:
         # test dupe finder
         if TAG != '-ccbclear':
             with DATA_JSON.open('r') as f:
