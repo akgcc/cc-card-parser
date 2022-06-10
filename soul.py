@@ -194,8 +194,10 @@ def calculate_soul(data):
             # squad_score += core_sets[squad]
         # print(squad_score)
         # data[k]['soul'] = round(100*(1-sum(t)/len(t)),2)
-        
-        data[k]['soul'] = round(100 * sum(t) / sum_of_weights, 2)
+        try:
+            data[k]['soul'] = round(100 * sum(t) / sum_of_weights, 2)
+        except ZeroDivisionError:
+            data[k]['soul'] = 100
     return data
 if __name__ == '__main__':
     from time import time

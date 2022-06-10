@@ -6,8 +6,6 @@ import json
 # from lxml import etree
 NA_OPS = {}
 CN_OPS = {}
-NA_SHOP_OPS = {}
-CN_SHOP_OPS = {}
 def get_operator_lists(live = True):
     # xml is malformed, so we use regex instead.
     if live:

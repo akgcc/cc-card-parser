@@ -62,21 +62,24 @@ CC_START_DATES = {
 '-ccbclear':1591995600#Friday, June 12, 2020 9:00:00 PM GMT
 }
 
-    
+DATA_SOURCE = "https://raw.githubusercontent.com/Aceship/AN-EN-Tags/master/json/gamedata/"
+CC_DATA_SOURCE = 'https://raw.githubusercontent.com/Kengxxiao/ArknightsGameData/master/'
+# DATA_SOURCE = 'https://raw.githubusercontent.com/Kengxxiao/ArknightsGameData/master/'
+# CC_DATA_SOURCE = DATA_SOURCE
 # update character_table.json, and patch with char_patch_table
 def update_char_table():
     if not crisisDataPath.exists() or time.time() - crisisDataPath.stat().st_mtime > 60*60*24:
-        with requests.get('https://raw.githubusercontent.com/Kengxxiao/ArknightsGameData/master/en_US/gamedata/excel/crisis_table.json') as r:
+        with requests.get(CC_DATA_SOURCE+'en_US/gamedata/excel/crisis_table.json') as r:
             if r.status_code == 200:
                 with crisisDataPath.open('wb') as f:
                     f.write(r.content)
     if not charDataPath.exists() or time.time() - charDataPath.stat().st_mtime > 60*60*24:
-        with requests.get('https://raw.githubusercontent.com/Kengxxiao/ArknightsGameData/master/en_US/gamedata/excel/character_table.json') as r:
+        with requests.get(DATA_SOURCE+'en_US/gamedata/excel/character_table.json') as r:
             if r.status_code == 200:
                 with charDataPath.open('wb') as f:
                     f.write(r.content)
     if not charDataPatchPath.exists() or time.time() - charDataPatchPath.stat().st_mtime > 60*60*24:
-        with requests.get('https://raw.githubusercontent.com/Kengxxiao/ArknightsGameData/master/en_US/gamedata/excel/char_patch_table.json') as r:
+        with requests.get(DATA_SOURCE+'en_US/gamedata/excel/char_patch_table.json') as r:
             if r.status_code == 200:
                 with charDataPatchPath.open('wb') as f:
                     f.write(r.content)
@@ -1195,6 +1198,8 @@ if __name__ == '__main__':
     # test a random image:
     # paths = [random.choice(paths)]
     # test a specific image:
+    # test = './images-cc6clear/1646131485278.jpg' 
+   
     # test = './images-cc1clear/1605109000511.jpg' 
     # test = './images-cc1clear/1606203199640.jpg'
     # test = './images-cc4clear/1627301022848.png'
@@ -1209,14 +1214,15 @@ if __name__ == '__main__':
     # test = './images-cc4clear/1626720793105.png' #meteorite recognized as bena.
     # test = './images-cc0clear/1599836698409.jpg' #meteorite recognized as bena.
     # test = './images-cc3clear/1622437965161.png' # multiple skills wrong
-
+    # test = './images-cc6clear/1646344197575.jpg' # img missing
+    # test = './images-cc6clear/1647236118113.png' # img missing
     # DEBUG = True
     # SHOW_RES = True
     # DO_ASSERTS = True
 
     if test:
         paths = [Path(test).resolve()]
-    if len(paths) == 1:
+    # if len(paths) == 1:
         SHOW_RES = True
 
     with assertTests.open('rb') as f:
@@ -1227,7 +1233,8 @@ if __name__ == '__main__':
     with assertTests.open('wb') as f:
         pickle.dump(assert_pairs, f)
     # must do this before anything else
-    _generate_avatar_data()
+    # to ensure data isn't stale, check file mtime (stale is over 14 days old)
+    _generate_avatar_data(rebuild_all = (AV_HISTS_DATA.exists() and (time.time() - AV_HISTS_DATA.stat().st_mtime > 60*60*24*14)))
 
     if DO_ASSERTS and not SHOW_RES:
         for f,o in assert_pairs.items():
@@ -1249,7 +1256,7 @@ if __name__ == '__main__':
         exit()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-        future_to_url = {executor.submit(parse_squad, path, len(paths)>1): path for path in paths}
+        future_to_url = {executor.submit(parse_squad, path, test is None): path for path in paths}
         for future in concurrent.futures.as_completed(future_to_url):
             url = future_to_url[future]
             try:
@@ -1259,7 +1266,8 @@ if __name__ == '__main__':
                 with open('failed_image_parse.txt','w') as f:
                     f.write(str(url))
                 raise
-    if len(paths)==1:
+    # if len(paths)==1:
+    if test:
         exit()
     with SQUAD_JSON.open('w') as f:
         json.dump(SQUADS,f)
