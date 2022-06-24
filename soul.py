@@ -3,6 +3,8 @@ import numpy as np
 import json
 from copy import deepcopy
 from pprint import pprint
+import matplotlib.pyplot as plt
+
 # current formula:
 # U = uniqueness of an operator (% of clears they appear in)
 # U' = all values of U (for every operator)
@@ -137,7 +139,7 @@ def calculate_soul_test(data):
         # avg without weights:
         # data[k]['soul'] = round(100 * sum([uniqueness[c] for c in ps]) / len(ps), 2)
     return data
-def calculate_soul(data):
+def calculate_soul_old(data):
     # total = len(data) # this was incorrectly here.
     tally = {}
     data_stripped = deepcopy(data)
@@ -180,6 +182,13 @@ def calculate_soul(data):
     MED = max(uniqueness.values()) / 2
     weights = {k:abs(v-MED)/SD for k,v in uniqueness.items()}
     # print(weights)
+    with open('character_table.json') as f:
+        cmap = json.load(f)
+    soulmap = {k:uniqueness[k]*weights[k] for k in weights.keys()}
+    # for c in weights.keys():
+        # print(f"{cmap[c]['name']}:\t{uniqueness[c]*weights[c]:.2f}")
+    for k,v in sorted(soulmap.items(), key=lambda x: x[1]):
+        print(f"{cmap[k]['name']+':':20}\t{v:.2f}\t{uniqueness[k]:.2f}\t{weights[k]:.2f}")
     for k,v in data.items():
         # t= [(uniqueness[c],)*int((1-uniqueness[c])/.2 + 1) for c in v['squad']]
         # t = list(sum(t, ())) # flatten
@@ -199,11 +208,62 @@ def calculate_soul(data):
         except ZeroDivisionError:
             data[k]['soul'] = 100
     return data
+def calculate_soul(data):
+    with open('character_table.json') as f:
+        cmap = json.load(f)
+    tally = {}
+    data_stripped = deepcopy({k:v for k,v in data.items() if v['risk']>=18})
+    for k,v in data_stripped.items():
+        v['squad'] = [x['name'] for x in v['squad']]
+    data_copy = deepcopy(data_stripped)
+    for k,v in data_stripped.items():
+        if 'dupe_group' in v and v['risk']>=18:
+            squad = data_copy.setdefault(v['dupe_group'],{'squad':[],'risk':18})['squad']
+            data_copy[v['dupe_group']]['squad'] = list(set(squad) | set(v['squad']))
+            del data_copy[k]
+    for k,v in data_copy.items():
+        for charid in v['squad']:
+            tally.setdefault(charid,0)
+            if v['risk']>=18:
+                tally[charid]+=1
+    # print(sorted(tally.values()))
+    rms = statistics.mean([v**2 for v in tally.values()])**.5 # quadratic mean
+    MIN_WEIGHT = .9
+    weights = {k:max(MIN_WEIGHT,abs(v-rms)/rms) for k,v in tally.items()}
+    # weights = {k:max(MIN_WEIGHT,abs(v)/rms) for k,v in tally.items()}
+    rarity_weights = [1,1,4,5,5,7.5]
+    weights = {k:v*rarity_weights[cmap[k]['rarity']] for k,v in weights.items()}
+    uniqueness = {k: 1 - v/(len(data_copy)*1) for k,v in tally.items()}
+    # fig, (ax1, ax2) = plt.subplots(1, 2)
+    # fig.suptitle('uniqueness & weights')
+    # ax1.plot(sorted(uniqueness.values()))
+    # ax2.plot([x[1] for x in sorted(weights.items(),key=lambda y: tally[y[0]])])
+    # ax1.axhline(y=rms, color='r', linestyle='-')
+    # plt.show()
+    
+    # soulmap = {k:uniqueness[k]*weights[k] for k in weights.keys()}
+    # for k,v in sorted(soulmap.items(), key=lambda x: x[1]):
+        # print(f"{cmap[k]['name']+':':30}\t{v:.2f}\t{uniqueness[k]:.2f}\t{weights[k]:.2f}")
+    for c in cmap:
+        if c not in weights:
+            weights[c] = 0
+            uniqueness[c] = 1
+    for k,v in data.items():
+        squad = [x['name'] for x in v['squad']]
+        t = [uniqueness[c]*weights[c] for c in squad]
+        sum_of_weights = sum([weights[k] for k in squad])
+        try:
+            data[k]['soul'] = round(100 * sum(t) / sum_of_weights, 2)
+        except ZeroDivisionError:
+            data[k]['soul'] = 100
+    return data
+
 if __name__ == '__main__':
     from time import time
     s = time()
-    # for fn in ['data-ccbclear.json', 'data-cc0clear.json', 'data-cc1clear.json', 'data-cc2clear.json', 'data-cc3clear.json', 'data-cc4clear.json', 'data-cc5clear.json']:
-    for fn in ['data-cc5clear.json']:
+    # for fn in ['json/data-ccbclear.json', 'json/data-cc0clear.json', 'json/data-cc1clear.json', 'json/data-cc2clear.json', 'json/data-cc3clear.json', 'json/data-cc4clear.json', 'json/data-cc5clear.json',
+    # 'json/data-cc6clear.json', 'json/data-cc7clear.json']:
+    for fn in ['json/data-cc6clear.json']:
         with open(fn,'r') as f:
             res = calculate_soul(json.load(f))
         with open(fn,'w') as f:

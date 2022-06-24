@@ -1,0 +1,15 @@
+{
+"1646211895961.jpg": {"squad": [{"name": "char_456_ash", "skill": 2}, {"name": "char_151_myrtle", "skill": 1}, {"name": "char_293_thorns", "skill": 3}, {"name": "char_1012_skadi2", "skill": 2}, {"name": "char_003_kalts", "skill": 3}, {"name": "char_350_surtr", "skill": 2}, {"name": "char_222_bpipe", "skill": 2}]},
+"1646211923335.jpg": {"squad": [{"name": "char_350_surtr", "skill": 3}, {"name": "char_151_myrtle", "skill": 1}, {"name": "char_293_thorns", "skill": 3}, {"name": "char_103_angel", "skill": 3}, {"name": "char_003_kalts", "skill": 3}, {"name": "char_401_elysm", "skill": 1}, {"name": "char_222_bpipe", "skill": 2}]},
+"1646183572387.jpg": {"squad": [{"name": "char_128_plosis", "skill": 2}, {"name": "char_196_sunbr", "skill": 1}, {"name": "char_358_lisa", "skill": 2}, {"name": "char_180_amgoat", "skill": 3}, {"name": "char_151_myrtle", "skill": 1}, {"name": "char_272_strong", "skill": 2}, {"name": "char_112_siege", "skill": 1}]},
+"1646210348597.jpg": {"duplicate_of": "1646316211368.jpg"},
+"1646280151931.jpg": {"duplicate_of": "1646282957974.jpg"},
+"1646282957974.jpg": {"duplicate_of": "1646321518353.jpg"},
+"1646305894332.jpg": {"squad": [{"name": "char_248_mgllan", "skill": 2}, {"name": "char_291_aglina", "skill": 3}, {"name": "char_336_folivo", "skill": 2}]},
+"1646250426113.jpg": {"duplicate_of": "1646356435340.jpg"},
+"1646316211368.jpg": {"duplicate_of": "1646965752630.jpg"},
+"1646247983052.jpg": {"duplicate_of": "1646317420406.jpg"},
+"1646473272289.jpg": {"squad": [{"name": "char_391_rosmon", "skill": 3}, {"name": "char_151_myrtle", "skill": 1}, {"name": "char_179_cgbird", "skill": 3}, {"name": "char_172_svrash", "skill": 3}, {"name": "char_222_bpipe", "skill": 3}, {"name": "char_350_surtr", "skill": 3}, {"name": "char_003_kalts", "skill": 3}, {"name": "char_102_texas", "skill": 2}, {"name": "char_143_ghost", "skill": 2}, {"name": "char_340_shwaz", "skill": 3}]},
+"1646973542658.jpg" : {"group": 1},
+"1646770709537.jpg" : {"group": 1}
+}

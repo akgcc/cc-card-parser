@@ -1,0 +1,14 @@
+{
+"1654959342649.jpg": {"group": 0},
+"1654839551664.jpg": {"group": 0},
+"1655117073144.jpg": {"squad": [{"name": "char_222_bpipe", "skill": 3}, {"name": "char_179_cgbird", "skill": 3}, {"name": "char_430_fartth", "skill": 3}, {"name": "char_151_myrtle", "skill": 1}, {"name": "char_010_chen", "skill": 2}, {"name": "char_401_elysm", "skill": 2}, {"name": "char_202_demkni", "skill": 3}, {"name": "char_332_archet", "skill": 3}, {"name": "char_174_slbell", "skill": 2}, {"name": "char_485_pallas", "skill": 3}, {"name": "char_102_texas", "skill": 2}, {"name": "char_106_franka", "skill": 2}], "group": 1, "risk": 22, "support": {"name": null}},
+"1654884038467.jpg": {"duplicate_of": "1655032755916.jpg"},
+"1654996932072.jpg": {"duplicate_of": "1654835079802.jpg"},
+"1655469558308.jpg": {"duplicate_of": "1655503623630.jpg"},
+"1655492248865.jpg": {"duplicate_of": "1655503623630.jpg"},
+"1655496993693.jpg": {"duplicate_of": "1655503623630.jpg"},
+"1655481947494.jpg": {"duplicate_of": "1655503623630.jpg"},
+"1655419879758.jpg": {"duplicate_of": "1655503623630.jpg"},
+"1655405614023.jpg": {"duplicate_of": "1655503623630.jpg"},
+"1655406030775.jpg": {"group": 1}
+}

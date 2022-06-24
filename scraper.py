@@ -6,6 +6,7 @@ import time
 
 tag = sys.argv[1]
 base_url = f'https://arch.b4k.co/vg/search/filename/%2A{tag}%2A/'
+scrape_all_pages = False # only set to true if you think an image was skipped
 
 outputDir = Path(f'./images{tag}/').resolve()
 outputDir.mkdir(exist_ok=True)
@@ -30,7 +31,7 @@ while next_page:
                 total += 1
             time.sleep(1)
     else:
-        if not new and len(images) > 5:
+        if not new and len(images) > 5 and not scrape_all_pages:
             break
         time.sleep(2)
         continue

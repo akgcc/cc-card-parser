@@ -14,6 +14,9 @@ import statistics
 import copy
 import time
 import requests
+import re
+from PIL import Image
+import imagehash
 from soul import calculate_soul
 def _pickle_keypoints(point):
     return cv2.KeyPoint, (*point.pt, point.size, point.angle,
@@ -43,7 +46,7 @@ DATA_FIXES_JSON = JSON_DIR.joinpath(f'data{TAG}-fixes.json')
 DATA_DUPE_FIXES_JSON = JSON_DIR.joinpath(f'data{TAG}-dupes.json')
 SKILL_ICON_FIXES_JSON = JSON_DIR.joinpath('skill_icon_map.json')
 doctorDir=Path(f'./doctors{TAG}/').resolve()
-# shutil.rmtree(doctorDir) # delete entire doctor dir to remove residual images
+shutil.rmtree(doctorDir) # delete entire doctor dir to remove residual images, otherwise dupes which you moved to invalid will break the parser.
 cropDir=Path(f'./cropped{TAG}/').resolve()
 riskDir=Path(f'./risks{TAG}/').resolve()
 numsDir=Path(f'./numberTemplates/').resolve()
@@ -56,7 +59,7 @@ blankTemplate = Path('./BLANK_720.png').resolve()
 charDataPath = Path('./character_table.json').resolve()
 crisisDataPath = Path('./crisis_table.json').resolve()
 charDataPatchPath = Path('./char_patch_table.json').resolve()
-failedParses = Path('./FAILED_PARSES.json').resolve()
+failedParses = Path('./FAILED_PARSES.txt').resolve()
 assertTests = Path('./assert_tests.p').resolve()
 CC_START_DATES = {
 '-ccbclear':1591995600#Friday, June 12, 2020 9:00:00 PM GMT
@@ -115,8 +118,8 @@ def add_extra_data(data):
         try:
             v['avgRarity'] = round(sum([CHAR_DATA[c['name']]['rarity'] for c in v['squad']])/len(v['squad'])+1,3)
             v['opcount'] = len(v['squad'])
-        except:
-            print('ERROR ADDING EXTRA DATA',k,v)
+        except Exception as e:
+            print('ERROR ADDING EXTRA DATA',k,v,e)
     data = bubble_duplicates(data)
     return data
 def bubble_duplicates(data):
@@ -125,6 +128,28 @@ def bubble_duplicates(data):
             continue
         while v['duplicate_of'] in data and 'duplicate_of' in data[v['duplicate_of']]:
             v['duplicate_of'] = data[v['duplicate_of']]['duplicate_of']
+    return data
+def group_duplicates(data):
+    # instead of using "duplicate_of", group all dupes into "dupe_group"s
+    # just use this inefficient method:
+    groups = []
+    for k,v in data.items():
+        if 'duplicate_of' not in v:
+            continue
+        for g in groups:
+            if v['duplicate_of'] in g:
+                g.append(k)
+                break
+        else:
+            groups.append([k,v['duplicate_of']])
+    # add to data, but also remove all duplicate_of to save space.
+    group_number = 0
+    for g in groups:
+        for k in g:
+            data[k]['dupe_group'] = f'{group_number}{TAG}'
+        group_number+=1
+    for v in data.values():
+        v.pop('duplicate_of',None)
     return data
 def clean_output_folders(data):
     for dir in (cropDir,doctorDir,thumbsDir,riskDir):
@@ -146,6 +171,7 @@ def fix_json_data(data):
         with DATA_FIXES_JSON.open('r') as f:
             dictupdate(data,json.load(f))
     return data
+
 def crop_sidebars(im):
     gray = cv2.cvtColor(im,cv2.COLOR_BGR2GRAY)
     edges = cv2.Canny(gray,30,150,apertureSize = 3) # was 50,150
@@ -341,6 +367,181 @@ def unsharp_mask(image, kernel_size=(5, 5), sigma=1.0, amount=1.0, threshold=0):
         np.copyto(sharpened, image, where=low_contrast_mask)
     return sharpened
 def remove_duplicates(data):
+    # now uses imagehash along with ssim
+    global MANUAL_DUPE_VERIFICATION
+    # move all files OUT of duplicates first
+    for dir in (cropDir, thumbsDir):
+        for file in dir.joinpath('duplicates/').glob('*.*'):
+            try:
+                file.rename(dir.joinpath(file.name))
+            except FileExistsError:
+                file.unlink()
+    def archiveClear(file, originalFile, move_files):
+        for dir in (cropDir, thumbsDir):
+            if dir.joinpath(file.name).exists():
+                data[file.name]['duplicate_of'] = originalFile.name
+                # only move dupes that won't be displayed.
+                if move_files:
+                    try:
+                        dir.joinpath(file.name).rename(dir.joinpath('duplicates/').joinpath(file.name))
+                    except FileExistsError:
+                        dir.joinpath(file.name).unlink()
+        for dir in (doctorDir, ):
+            oDir = dir.joinpath('duplicates/').joinpath(originalFile.stem)
+            oDir.mkdir(exist_ok=True)
+            if dir.joinpath(file.with_suffix('.png').name).exists():
+                try:
+                    shutil.copy(dir.joinpath(file.with_suffix('.png').name) ,oDir.joinpath(file.with_suffix('.png').name))
+                    shutil.copy(dir.joinpath(originalFile.with_suffix('.png').name) ,oDir.joinpath(originalFile.with_suffix('.png').name))
+                except FileExistsError:
+                    pass
+   
+    # KP_TH = 70
+    # KP_TH_LOW = 50
+    # HIGH_TH = .6
+    # MANUAL_VERIFY_TH = .5
+    
+    def images_are_similar(a,b):
+        kp_1, desc_1 = sift_data[a[0]]
+        kp_2, desc_2 = sift_data[b[0]]
+        if len(kp_1)<2 or len(kp_2)<2:
+            return 0,0
+        matches = G_BF.knnMatch(desc_1,desc_2, k=2)
+        good_points = []
+        for m,n in matches:
+            if m.distance <.7*n.distance: # lower ratio is stricter.
+                good_points.append(m)
+        number_keypoints = max(len(kp_1),len(kp_2))
+        # if len(good_points)/number_keypoints > .65 and  '1623332632019.png' in (a[0].name,b[0].name):
+            # print('similar with',len(good_points),number_keypoints,'kps',len(good_points)/number_keypoints,'to',b[0].name)
+        return len(good_points)/number_keypoints,number_keypoints
+        
+    paths = list(doctorDir.glob('*.*'))
+    def merge(d,v):
+        for k in v:
+            d.add(k)
+            if k in groups:
+                a = groups[k]
+                del groups[k]
+                merge(d,a)
+        return d
+    dupes_json = {}
+    # load manually assigned dupes
+    if DATA_DUPE_FIXES_JSON.exists():
+        with DATA_DUPE_FIXES_JSON.open('r') as f:
+            dupes_json = json.load(f)
+    # MANUAL_DUPE_VERIFICATION = 0
+    # remove invalid dupe pairs (original file was made invalid)
+    
+    groups = {}
+    hashfunc = imagehash.phash
+    
+    # paths = [p for p in paths if p.stem in ('1655433607081','1654830094868')]
+    # paths = [p for p in paths if p.stem in ('1655471405936','1654865775725')]
+    # paths = [p for p in paths if p.stem in ('1655554223310','1655229086576')]
+    # paths = [p for p in paths if p.stem in ('1654835079802','1654996932072')]
+    cv_ims = {p : cv2.imread(str(p)) for p in paths}
+    fast = cv2.FastFeatureDetector_create()
+    ims_FAST = {k:len(fast.detect(v,None)) for k,v in cv_ims.items()}
+    # print(ims_FAST.values())
+    
+    FAST_TH = 65 # any fewer and we throw out this image (mostly solid color)
+    
+    valid_paths = [p for p in paths if ims_FAST[p] > FAST_TH]
+    # print('valid paths:', len(valid_paths),'/',len(paths))
+    # print([ims_FAST[p] for p in paths ])
+    im_hashes = [(p,hashfunc(Image.open(p))) for p in valid_paths]
+    
+    # use ssim to filter weak imagehash matches
+    set1 = [(k,cv2.cvtColor(v, cv2.COLOR_BGR2GRAY)) for k,v in cv_ims.items()]
+    lower_gray = np.array([0,0,100]) # 95 works but leave some leeway
+    upper_gray = np.array([255,255,255])
+    hsv = [cv2.cvtColor(v, cv2.COLOR_BGR2HSV) for v in cv_ims.values()]
+    grays = [cv2.inRange(cv2.blur(a,(7,7)), lower_gray, upper_gray) for a in hsv]
+    edges = [cv2.Canny(a,50,150,apertureSize = 3) for a in grays] 
+    contours = [cv2.findContours(ed,cv2.RETR_TREE,cv2.CHAIN_APPROX_NONE)[0] for ed in edges]
+    cntminxs = [cv2.boundingRect(min(c, key = lambda x: cv2.boundingRect(x)[0]))[0] if c else 0 for c in contours]
+    set1 = [(i[0],cv2.warpAffine(i[1], np.float32([[1,0,-cntminxs[idx]],[0,1,0]]), (i[1].shape[1], i[1].shape[0]))) for idx,i in enumerate(set1)]
+    sift_data = {a[0]:G_SIFT.detectAndCompute(a[1], None) for a in set1}
+    
+    ssim_kp_th = 95 # very high value to avoid false positives
+    ssim_score_th = [.5,.65] # lower th for manual verification, higher th is automatic (.6 might be ok but err on the safe side)
+    dupe_th = 2
+    possible_dupe_th = 4
+    # stretch_dupe_th no longer used (effectively infinity)
+    # stretch_dupe_th = 20 # this value is extremely high, but used to catch outliers (5 would be reasonable if not using ssim to check)
+    for a,b in itertools.combinations(im_hashes,2):
+        dupekey = '|'.join(sorted([a[0].name,b[0].name]))
+        is_dupe = dupes_json.get(dupekey,False)
+        # print(a[1]-b[1],images_are_similar(a,b))
+        if a[1]-b[1] < dupe_th:
+            is_dupe = True
+        # elif a[1]-b[1] < possible_dupe_th:
+            # if MANUAL_DUPE_VERIFICATION and dupekey not in dupes_json:
+                # d = np.concatenate((cv_ims[a[0]], cv_ims[b[0]]), axis=1)
+                # cv2.imshow('press y if these are the same, or another key if not',d)
+                # print('ssim:',score,kps)
+                # k = cv2.waitKey(15000)
+                # if k==ord('y'):
+                    # dupes_json[dupekey] = 1
+                # elif k != -1:
+                    # dupes_json[dupekey] = 0
+                # else:
+                    # print('Timed out, skipping manual dupe verification.')
+                    # MANUAL_DUPE_VERIFICATION = False
+                # cv2.destroyAllWindows()
+        elif dupekey not in dupes_json:# and a[1]-b[1] < stretch_dupe_th:
+            score,kps = images_are_similar(a,b)
+            if score > ssim_score_th[1] and (kps > ssim_kp_th or score == 1): # these MUST be the same doctor (use a high th)
+                # is a dupe
+                is_dupe = True
+                # if a[1]-b[1] > 4:
+                    # d = np.concatenate((cv_ims[a[0]], cv_ims[b[0]]), axis=0)
+                    # cv2.imshow('THESE BETTER BE THE SAME',d)
+                    # print('ssim:',a[1]-b[1],score,kps)
+                    # cv2.waitKey(0)
+                    # cv2.destroyAllWindows()
+            elif MANUAL_DUPE_VERIFICATION and score > ssim_score_th[0]: #  and kps > ssim_kp_th:
+                # potentially a dupe
+                d = np.concatenate((cv_ims[a[0]], cv_ims[b[0]]), axis=0)
+                cv2.imshow('press y if these are the same, or another key if not',d)
+                k = cv2.waitKey(60000)
+                if k==ord('y'):
+                    dupes_json[dupekey] = 1
+                    is_dupe = True
+                elif k != -1:
+                    dupes_json[dupekey] = 0
+                else:
+                    print('Timed out, skipping manual dupe verification.')
+                    MANUAL_DUPE_VERIFICATION = False
+                time.sleep(.25)
+                print('ssim:',a[1]-b[1],score,kps,is_dupe,a[0].name,b[0].name)
+                cv2.destroyAllWindows()
+        if is_dupe:
+            groups.setdefault(a[0],[]).append(b[0])
+            groups.setdefault(b[0],[]).append(a[0])
+    with DATA_DUPE_FIXES_JSON.open('w') as f:
+        json.dump(dupes_json, f)
+        
+    grouped = []
+    for k in list(groups.keys()):
+        if k in groups:
+            a = groups[k]
+            del groups[k]
+            grouped.append(merge(set([k]),a))
+    print('TOTAL DUPES FOUND:',sum([len(v) for v in grouped]))
+    for i,g in enumerate(grouped):
+        dupes = sorted(g,key=lambda x: x.stem)# sort by filename, this makes a big assumption that all filenames are timestamps.
+        groups = set([data[dupes[-1].with_suffix(OUTPUT_IMG_TYPE).name]['group']])
+        # res = np.concatenate([cv_ims[p] for p in dupes], axis=1)
+        # cv2.imshow('dupegroup', res)
+        # cv2.waitKey(0)
+        for d in dupes[-2::-1]:# reversed but skip first (prev last) element
+            group = data[d.with_suffix(OUTPUT_IMG_TYPE).name]['group']
+            archiveClear(d.with_suffix(OUTPUT_IMG_TYPE), dupes[-1].with_suffix(OUTPUT_IMG_TYPE), group in groups)
+            groups.add(group)
+def remove_dupes_ssim(data):
+    # old dupe finder, before switching to phash
     global MANUAL_DUPE_VERIFICATION
     # move all files OUT of duplicates first
     for dir in (cropDir, thumbsDir):
@@ -400,7 +601,6 @@ def remove_duplicates(data):
     imsize = im[0][1].shape[0]*im[0][1].shape[1]
     # hist_data = {a[0]:cv2.calcHist(a[1], list(range(3)), None, [50,50,50], [0,256]+[0,256]+[0,256], accumulate=False) for a in im}
     
-    
     set1 = [(i[0],cv2.cvtColor(i[1], cv2.COLOR_BGR2GRAY)) for i in im]
     # edges = [cv2.Canny(a[1],50,150,apertureSize = 3) for a in set1] 
     # contours = [cv2.findContours(ed,cv2.RETR_TREE,cv2.CHAIN_APPROX_NONE)[0] for ed in edges]
@@ -445,7 +645,7 @@ def remove_duplicates(data):
     # sift_data = {a[0]:G_SIFT.detectAndCompute(unsharp_mask(a[1]), None) for a in set1}
     sift_data = {a[0]:G_SIFT.detectAndCompute(a[1], None) for a in set1}
     
-    
+    # dupes = [a for a in set1 if a[0].name in ('1654835057555.png','1654983227637.png')]
     # dupes = [a for a in set1 if a[0].name in ('1626298768237.png','1627344552523.png')]
     # dupes = [a for a in set1 if a[0].name in ('1626413456716.png','1626776973041.png')]
     # dupes = [a for a in set1 if a[0].name in ('1626277927333.png','1626754282586.png')]
@@ -455,7 +655,7 @@ def remove_duplicates(data):
     
     # cv2.imshow('1',dupes[0][1])
     # cv2.imshow('2',dupes[1][1])
-    # print(images_are_similar(dupes[0],dupes[1]))
+    # print(images_are_similar(dupes[0],dupes[1]),dupes[0][0].name,dupes[1][0].name)
     # cv2.waitKey()
     # exit()
     # for i in dupes:
@@ -463,7 +663,7 @@ def remove_duplicates(data):
         # cv2.waitKey()
     # exit()
     
-    
+
     groups = {}
     sim_map = {}
     HIGH_TH = .6
@@ -482,7 +682,8 @@ def remove_duplicates(data):
                     # sim_map[k+v['duplicate_of']] = (2,KP_TH+1)
                     # sim_map[v['duplicate_of']+k] = (2,KP_TH+1)
                     # sim_map[k] = v
-            
+    # print(sim_map[dupes[0][0].name+dupes[1][0].name])
+    # exit()
     # inefficient but luckily not too slow since images are small.
     for a,b in itertools.combinations(set1,2):
         if a[0].name+b[0].name not in sim_map:
@@ -563,7 +764,6 @@ def remove_duplicates(data):
             group = data[d.with_suffix(OUTPUT_IMG_TYPE).name]['group']
             archiveClear(d.with_suffix(OUTPUT_IMG_TYPE), dupes[-1].with_suffix(OUTPUT_IMG_TYPE), group in groups)
             groups.add(group)
-
 def createThumbs():
     # for paths in (cropDir.glob('*.*'),cropDir.joinpath('duplicates/').glob('*.*')):
         for path in cropDir.glob('*.*'):
@@ -799,6 +999,7 @@ def parse_squad(path, save_images = True):
         cv2.waitKey()
     print(f'processing {path}...')
     # initial cropping, handles most cases
+
     oim = quick_crop(oim)
     oim = crop_titlebar(oim)
     oim = crop_sidebars(oim)
@@ -1113,8 +1314,12 @@ def _generate_avatar_data(rebuild_all=False):
         av_hists = []
         avatars = list(avatarDir.glob('char_*'))#[:1]
         
+        # remove invalid files like "char_298_susuro5.png" or "char_340_shwazr6.png"
+        invalid_ext = re.compile('\d+(\..+)')
+        avatars = [av for av in avatars if invalid_ext.sub('\\1',av.name) not in set([a.name for a in avatars]).difference([av.name])]
+        
         # create OPMASK, a bitwise and of ALL operator images.
-        ret, OPMASK = cv2.threshold(cv2.imread(str(avatars[0]), cv2.IMREAD_UNCHANGED)[:, :, 3], 0, 255, cv2.THRESH_BINARY)
+        ret, OPMASK = cv2.threshold(cv2.imread(str(next(iter(avatars))), cv2.IMREAD_UNCHANGED)[:, :, 3], 0, 255, cv2.THRESH_BINARY)
         for av in avatars:
             im = cv2.imread(str(av), cv2.IMREAD_UNCHANGED)
             ret, mask = cv2.threshold(im[:, :, 3], 0, 255, cv2.THRESH_BINARY)
@@ -1216,6 +1421,9 @@ if __name__ == '__main__':
     # test = './images-cc3clear/1622437965161.png' # multiple skills wrong
     # test = './images-cc6clear/1646344197575.jpg' # img missing
     # test = './images-cc6clear/1647236118113.png' # img missing
+    # test = r'.\images-cc7clear\1655318875062.jpg'
+    # test = './images-cc7clear/1655362131273.png'
+    # test = './images-cc1clear/1605850911232.png'
     # DEBUG = True
     # SHOW_RES = True
     # DO_ASSERTS = True
@@ -1247,6 +1455,10 @@ if __name__ == '__main__':
         exit()
     if 0:
         # test dupe finder
+        # document.querySelectorAll('.cardContainer').forEach(c=> {
+            # if (!c.getAttribute('data-dupe'))
+                # c.style.display='none'
+        # })
         if TAG != '-ccbclear':
             with DATA_JSON.open('r') as f:
                 data = json.load(f)
@@ -1263,8 +1475,8 @@ if __name__ == '__main__':
                 data = future.result()
             except:
                 print('EXCEPTION IN THREAD:',url,flush=True)
-                with open('failed_image_parse.txt','w') as f:
-                    f.write(str(url))
+                with failedParses.open('a') as f:
+                    f.write(str(url)+'\n')
                 raise
     # if len(paths)==1:
     if test:
@@ -1277,16 +1489,17 @@ if __name__ == '__main__':
         data = json.load(f)
     print('creating thumbnails...')
     createThumbs()
-    print('removing dupes...')
-    if TAG != '-ccbclear':
-        remove_duplicates(data)
     print('parsing risks...')
     parse_risks(data)
     fix_json_data(data)
+    print('removing dupes...')
+    if TAG != '-ccbclear':
+        remove_duplicates(data)
+        group_duplicates(data)
     add_extra_data(data)
     with DATA_JSON.open('w') as f:
         json.dump(data,f)
-    calculate_soul(data)
+    # calculate_soul(data) # this is now done in the js, client side
     
     print('cleaning output dirs')
     clean_output_folders(data)
