@@ -1,10 +1,40 @@
 {
-"1627301022848.jpg": {"squad": [{"name": "char_197_poca", "skill": 3}, {"name": "char_151_myrtle", "skill": 1}, {"name": "char_222_bpipe", "skill": 3}, {"name": "char_172_svrash", "skill": 2}, {"name": "char_400_weedy", "skill": 1}, {"name": "char_311_mudrok", "skill": 3}, {"name": "char_214_kafka", "skill": 1}, {"name": "char_340_shwaz", "skill": 3}, {"name": "char_401_elysm", "skill": 2}, {"name": "char_391_rosmon", "skill": 2}, {"name": "char_358_lisa", "skill": 3}, {"name": "char_350_surtr", "skill": 3}]},
-"1626783169245.jpg": {"duplicate_of": "1627193775955.jpg"},
-"1626427723017.jpg": {"duplicate_of": "1627193775955.jpg"},
-"1626398647350.jpg": {"duplicate_of": "1627193775955.jpg"},
+	"1627301022848.jpg": {
+		"squad": [
+			{ "name": "char_197_poca", "skill": 3, "elite": 2 },
+			{ "name": "char_151_myrtle", "skill": 1, "elite": 2 },
+			{ "name": "char_222_bpipe", "skill": 3, "elite": 2 },
+			{ "name": "char_172_svrash", "skill": 2, "elite": 2 },
+			{ "name": "char_400_weedy", "skill": 1, "elite": 2 },
+			{ "name": "char_311_mudrok", "skill": 3, "elite": 2 },
+			{ "name": "char_214_kafka", "skill": 1, "elite": 2 },
+			{ "name": "char_340_shwaz", "skill": 3, "elite": 2 },
+			{ "name": "char_401_elysm", "skill": 2, "elite": 2 },
+			{ "name": "char_391_rosmon", "skill": 2, "elite": 2 },
+			{ "name": "char_358_lisa", "skill": 3, "elite": 2 },
+			{ "name": "char_350_surtr", "skill": 3, "elite": 2 }
+		]
+	},
+	"1626783169245.jpg": { "duplicate_of": "1627193775955.jpg" },
+	"1626427723017.jpg": { "duplicate_of": "1627193775955.jpg" },
+	"1626398647350.jpg": { "duplicate_of": "1627193775955.jpg" },
 
-"1626450296491.jpg": {"duplicate_of": "1627006712830.jpg"},
-"1626720793105.jpg": {"squad": [{"name": "char_265_sophia", "skill": 1}, {"name": "char_274_astesi", "skill": 2}, {"name": "char_215_mantic", "skill": 1}, {"name": "char_358_lisa", "skill": 2}, {"name": "char_219_meteo", "skill": 1}, {"name": "char_436_whispr", "skill": 2}, {"name": "char_202_demkni", "skill": 3}, {"name": "char_180_amgoat", "skill": 3}, {"name": "char_106_franka", "skill": 2}, {"name": "char_222_bpipe", "skill": 2}, {"name": "char_291_aglina", "skill": 3}, {"name": "char_151_myrtle", "skill": 1}]},
-"1637877308582.jpg": {"group": 1}
+	"1626450296491.jpg": { "duplicate_of": "1627006712830.jpg" },
+	"1626720793105.jpg": {
+		"squad": [
+			{ "name": "char_265_sophia", "skill": 1, "elite": 1 },
+			{ "name": "char_274_astesi", "skill": 2, "elite": 2 },
+			{ "name": "char_215_mantic", "skill": 1, "elite": 1 },
+			{ "name": "char_358_lisa", "skill": 2, "elite": 2 },
+			{ "name": "char_219_meteo", "skill": 1, "elite": 2 },
+			{ "name": "char_436_whispr", "skill": 2, "elite": 2 },
+			{ "name": "char_202_demkni", "skill": 3, "elite": 2 },
+			{ "name": "char_180_amgoat", "skill": 3, "elite": 2 },
+			{ "name": "char_106_franka", "skill": 2, "elite": 1 },
+			{ "name": "char_222_bpipe", "skill": 2, "elite": 2 },
+			{ "name": "char_291_aglina", "skill": 3, "elite": 2 },
+			{ "name": "char_151_myrtle", "skill": 1, "elite": 2 }
+		]
+	},
+	"1637877308582.jpg": { "group": 1 }
 }

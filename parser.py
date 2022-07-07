@@ -35,6 +35,7 @@ MAX_BAR_WIDTH = .065#% of image width; widest ive seen was 6.1%
 MAX_TITLEBAR_HEIGHT = .05# % of image height
 OP_ASPECT_RATIO = 130/156
 SKILL_ICON_SIZE = 34/720 # at 720p
+ELITE_ICON_SIZE = (25/720, 24/720) # at 720p # not a square its actually 25/24
 TAG = sys.argv[1]
 SQUADS = {}
 OUTPUT_IMG_QUALITY = 80
@@ -44,7 +45,6 @@ SQUAD_JSON = JSON_DIR.joinpath(f'squads{TAG}.json')
 DATA_JSON = JSON_DIR.joinpath(f'data{TAG}.json')
 DATA_FIXES_JSON = JSON_DIR.joinpath(f'data{TAG}-fixes.json')
 DATA_DUPE_FIXES_JSON = JSON_DIR.joinpath(f'data{TAG}-dupes.json')
-SKILL_ICON_FIXES_JSON = JSON_DIR.joinpath('skill_icon_map.json')
 doctorDir=Path(f'./doctors{TAG}/').resolve()
 shutil.rmtree(doctorDir) # delete entire doctor dir to remove residual images, otherwise dupes which you moved to invalid will break the parser.
 cropDir=Path(f'./cropped{TAG}/').resolve()
@@ -55,9 +55,11 @@ thumbsDir=Path(f'./thumbs{TAG}/').resolve()
 
 avatarDir=Path('./avatars/').resolve()
 skillDir=Path('./skills/').resolve()
+eliteDir=Path('./elite/').resolve()
 blankTemplate = Path('./BLANK_720.png').resolve()
 charDataPath = Path('./character_table.json').resolve()
 crisisDataPath = Path('./crisis_table.json').resolve()
+skillDataPath = Path('./skill_table.json').resolve()
 charDataPatchPath = Path('./char_patch_table.json').resolve()
 failedParses = Path('./FAILED_PARSES.txt').resolve()
 assertTests = Path('./assert_tests.p').resolve()
@@ -86,7 +88,12 @@ def update_char_table():
             if r.status_code == 200:
                 with charDataPatchPath.open('wb') as f:
                     f.write(r.content)
-    
+    if not skillDataPath.exists() or time.time() - skillDataPath.stat().st_mtime > 60*60*24:
+        with requests.get(DATA_SOURCE+'zh_CN/gamedata/excel/skill_table.json') as r:
+            if r.status_code == 200:
+                with skillDataPath.open('wb') as f:
+                    f.write(r.content)
+
     with charDataPath.open('rb') as f:
         data = json.load(f)
     with charDataPatchPath.open('rb') as f:
@@ -160,7 +167,7 @@ def generate_data_json():
     with SQUAD_JSON.open('r') as f:
         data = json.load(f)
     for k,v in data.items():
-        data[k] = {'squad': [{'name': '_'.join(i[0].split('_')[:3]).split('.')[0], 'skill': i[1]} for i in v[0]],'group':clear_group(k),'support':{'name': '_'.join(v[1][0].split('_')[:3]).split('.')[0], 'skill': v[1][1]} if v[1] else {'name':None}}
+        data[k] = {'squad': [{'name': '_'.join(i[0].split('_')[:3]).split('.')[0], 'skill': i[1], 'elite': i[2]} for i in v[0]],'group':clear_group(k),'support':{'name': '_'.join(v[1][0].split('_')[:3]).split('.')[0], 'skill': v[1][1], 'elite': v[1][2]} if v[1] else {'name':None}}
     for k in list(data.keys()):
         if not cropDir.joinpath(k).exists() and not cropDir.joinpath('duplicates/').joinpath(k).exists():
             del data[k]
@@ -970,6 +977,34 @@ def match_skill(opimg, opname, full_img_height):
                 best = max_val
                 skill = i+1
     return skill
+def match_elite(opimg, opname, full_img_height):
+    ' return elite level # 0-2 '
+    opkey = '_'.join(opname.split('_')[:3]).split('.')[0]
+    if opkey not in CHAR_DATA:
+        return 0
+    best,elite = 0,0
+    for i in range(1,len(CHAR_DATA[opkey]['phases'])):
+        # scale img based on width
+        scale_factor = ELITE_ICON_SIZE[0] * full_img_height / ELITE_ICONS[str(i)].shape[1]
+        # print(ELITE_ICONS[str(i)].shape[1], scale_factor)
+        template = cv2.resize(ELITE_ICONS[str(i)], (int(scale_factor * ELITE_ICONS[str(i)].shape[1]),int(scale_factor * ELITE_ICONS[str(i)].shape[0])), interpolation = cv2.INTER_AREA)
+        # cv2.imshow('sidebar_edges',template)
+        # cv2.imshow('sideasdbar_edges',ELITE_ICONS['1'])
+        # cv2.imshow('sidebar_edges',opimg[0:opimg.shape[0], 0:int(opimg.shape[1])])
+        
+        # cv2.waitKey(0)
+        # exit()
+        # print('SHAPES',ELITE_ICONS[str(i)].shape, template.shape)
+        #crop off right 1/4 of op img so potentials won't match elite
+        res = cv2.matchTemplate(opimg[0:opimg.shape[0], 0:int(opimg.shape[1]*1)],template,cv2.TM_CCOEFF_NORMED)
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+        # print(i, max_val,max_loc)
+        if max_val > best:
+            best = max_val
+            elite = i
+    if best < .75:
+        return 0
+    return elite
 def quick_crop(im):
     # crop out black bars
     hsv = cv2.cvtColor(im, cv2.COLOR_BGR2HSV) # this conversion fails on some images, just ignore bars in this case
@@ -1124,13 +1159,13 @@ def parse_squad(path, save_images = True):
             new_x, new_y = box[:2]
             if box[0] >= im.shape[1]:
                 #ENTIRE op is out of bounds, mark this as blank
-                matches.append((0,BLANK_NAME,r,0))
+                matches.append((0,BLANK_NAME,r,0,0))
             else:
                 op_img = im[max(box[1],0):box[1]+h,box[0]:box[0]+w]
                 expand_by = .5 # 50% but only to the left and bottom, as skill icon is in that corner.
                 op_img_expanded = im[int(max(box[1],0)):int(min(box[1]+h*(1+expand_by),im.shape[0])),int(box[0]-w*expand_by):int(box[0]+w)]
                 score,name = (match_op(op_img))
-                matches.append((score,name,r,match_skill(op_img_expanded, name, im.shape[0])))
+                matches.append((score,name,r,match_skill(op_img_expanded, name, im.shape[0]),match_elite(op_img_expanded, name, im.shape[0])))
                 if DEBUG or SHOW_RES:
                     cv2.putText(result_disp, name[5:-4], (new_x,new_y+h//3+c*25), cv2.FONT_HERSHEY_SIMPLEX, 
                     .7, (255, 255,0), 2, cv2.LINE_AA)
@@ -1145,17 +1180,17 @@ def parse_squad(path, save_images = True):
                 #if blank was found above an op (impossible state) then this col is invalid.
                 break
         else:
-            for score,name,row,skill in matches:
+            for score,name,row,skill,elite in matches:
                 # if score > .7:
                     # blankcnt = 4
                     # break
                 if name == BLANK_NAME:
                     blankcnt+=1
                 else:
-                    col_ops.append((row,name,skill))
+                    col_ops.append((row,name,skill,elite))
             if (not first_row_found) and len(col_ops)==1:
                 try:
-                    support_op = [x[1:3] for x in col_ops if x[0]>=3][0]
+                    support_op = [x[1:] for x in col_ops if x[0]>=3][0]
                 except IndexError:
                     pass
             rows_remaining -= 1
@@ -1180,7 +1215,7 @@ def parse_squad(path, save_images = True):
                         rows_remaining = 2
                         low_op_clear = True
             if first_row_found:
-                operator_list += [x[1:3] for x in col_ops]
+                operator_list += [x[1:] for x in col_ops]
             c += 1
             continue
         break
@@ -1386,12 +1421,27 @@ if __name__ == '__main__':
     SKILL_ICONS = {}
     for sk in skillDir.glob('skill_*.png'):
         SKILL_ICONS[sk.name[11:-4]] = cv2.imread(str(sk))
+    ELITE_ICONS = {}
+    for sk in eliteDir.glob('?_s_box.png'):
+        # icons have varying white space
+        if 1 or sk.name[0] == '1':
+            ELITE_ICONS[sk.name[0]] = cv2.imread(str(sk),cv2.IMREAD_UNCHANGED)#[(256-176):256,0:262]
+            b_channel, g_channel, r_channel, a_channel = cv2.split(ELITE_ICONS[sk.name[0]])
+            blank_image = np.zeros((*ELITE_ICONS[sk.name[0]].shape[:2],3), np.uint8)
+            # print(blank_image.shape, ELITE_ICONS[sk.name[0]][:,:,:].shape)
+            # im = cv2.bitwise_and(blank_image, ELITE_ICONS[sk.name[0]])
+            ELITE_ICONS[sk.name[0]] = cv2.bitwise_and(ELITE_ICONS[sk.name[0]], ELITE_ICONS[sk.name[0]],mask = a_channel)[:,:,:3]
+            # print('INIT SHAPE',ELITE_ICONS[sk.name[0]].shape)
+            # cv2.imshow('elite',ELITE_ICONS[sk.name[0]][:,:,:3])
+            # cv2.waitKey(0)
+            # exit()
+        # if sk.name[0] == '2':
+            # ELITE_ICONS[sk.name[0]] = cv2.imread(str(sk),cv2.IMREAD_UNCHANGED)#[3:37,0:40]#[(256-176):256,0:262]
     
     # fix for broken skill icons:
-    with SKILL_ICON_FIXES_JSON.open('r') as f:
-        skmap = json.load(f)
-    for k,v in skmap.items():
-        SKILL_ICONS[k] = SKILL_ICONS.get(k, SKILL_ICONS[v])
+    with skillDataPath.open('r') as f:
+        for k,v in json.load(f).items():
+            SKILL_ICONS[k] = SKILL_ICONS.get(k, SKILL_ICONS[v['iconId']])
 
     # for char in CHAR_DATA:
         # for sk in CHAR_DATA[char]['skills']:
@@ -1423,6 +1473,7 @@ if __name__ == '__main__':
     # test = './images-cc6clear/1647236118113.png' # img missing
     # test = r'.\images-cc7clear\1655318875062.jpg'
     # test = './images-cc7clear/1655362131273.png'
+    # test = './images-cc7clear/1655503623630.png'
     # test = './images-cc1clear/1605850911232.png'
     # DEBUG = True
     # SHOW_RES = True

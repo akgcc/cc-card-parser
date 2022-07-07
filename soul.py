@@ -1,3 +1,7 @@
+#####################
+## IMPORTANT NOTE: ##
+#####################
+# This file is only used for testing purposes, the actual formula is calculated by the client and located in cc.js
 import statistics
 import numpy as np
 import json
@@ -208,10 +212,15 @@ def calculate_soul_old(data):
         except ZeroDivisionError:
             data[k]['soul'] = 100
     return data
+    
+from operator import mul
+from functools import reduce 
 def calculate_soul(data):
+    import math
     with open('character_table.json') as f:
         cmap = json.load(f)
     tally = {}
+    print({k:v for k,v in data.items() if 'risk' not in v})
     data_stripped = deepcopy({k:v for k,v in data.items() if v['risk']>=18})
     for k,v in data_stripped.items():
         v['squad'] = [x['name'] for x in v['squad']]
@@ -228,15 +237,38 @@ def calculate_soul(data):
                 tally[charid]+=1
     # print(sorted(tally.values()))
     rms = statistics.mean([v**2 for v in tally.values()])**.5 # quadratic mean
-    MIN_WEIGHT = .9
+    MIN_WEIGHT = .95
+    ELITE_SOUL_EXEMPTIONS = ['char_214_kafka']#,'char_144_red','char_243_waaifu']
+    ELITE_SOUL_SCALE = [-.5,.75,1]
     weights = {k:max(MIN_WEIGHT,abs(v-rms)/rms) for k,v in tally.items()}
     # weights = {k:max(MIN_WEIGHT,abs(v)/rms) for k,v in tally.items()}
     rarity_weights = [1,1,4,5,5,7.5]
+    rarity_weights = [1,.5,4,4,5,6]
+    rarity_weights = [1,1,1,1,1,1]
     weights = {k:v*rarity_weights[cmap[k]['rarity']] for k,v in weights.items()}
     uniqueness = {k: 1 - v/(len(data_copy)*1) for k,v in tally.items()}
-    # fig, (ax1, ax2) = plt.subplots(1, 2)
-    # fig.suptitle('uniqueness & weights')
-    # ax1.plot(sorted(uniqueness.values()))
+    # print('tally',tally.values())
+    uniqueness = {k: 1/(math.log(v+20)) for k,v in tally.items()}
+    print(max(uniqueness.values()),min(uniqueness.values()))
+    dif = 1 / max(uniqueness.values())
+    uniqueness = {k: v*dif for k,v in uniqueness.items()}
+    weights = {k:rarity_weights[cmap[k]['rarity']] for k,v in weights.items()}
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+    fig.suptitle('uniqueness & weights')
+    # ax1.plot(sorted(weights.values()))
+    # ax1.plot(sorted(weights.values()))
+    # ax2.plot(sorted([math.log(v,2) for v in weights.values()]))
+    ax1.plot(sorted(uniqueness.values()))
+    ax2.plot(sorted({k: 1 - v/(len(data_copy)*1) for k,v in tally.items()}.values()))
+    # ax2.plot(sorted([1/(math.log(v,10)+1) for v in tally.values()]))
+    # print(sorted(tally.values()))
+    # print('uniq:',sorted(uniqueness.values()))
+    
+    math.e
+    math.log
+    # ax2.plot(sorted([math.log(v,10)+1 for v in tally.values()]))
+    # print(sorted([math.log(v,2) for v in tally.values()]))
+    # print(sorted(weights.values()))
     # ax2.plot([x[1] for x in sorted(weights.items(),key=lambda y: tally[y[0]])])
     # ax1.axhline(y=rms, color='r', linestyle='-')
     # plt.show()
@@ -249,11 +281,25 @@ def calculate_soul(data):
             weights[c] = 0
             uniqueness[c] = 1
     for k,v in data.items():
-        squad = [x['name'] for x in v['squad']]
-        t = [uniqueness[c]*weights[c] for c in squad]
-        sum_of_weights = sum([weights[k] for k in squad])
+        # squad = [x['name'] for x in v['squad']]
+        # print(v['squad'])
+        # len(cmap[k]['phases']) - data[
+        # current - max? will scale from 0 to -2
+        # do we want to have negative soul? maybe +1 so its 1 to -1 instead? only e0 of e2able ops gives negative??? this still lets u pad with 2* and 3*. (3* will have weight of 0 though, robots will default to negative soul)
+                
+        # print(k)
+        def ss(c):
+            return (1 if v['risk']==180 else ELITE_SOUL_SCALE[max(3+c['elite']-len(cmap[c['name']]['phases']),c['name'] in ELITE_SOUL_EXEMPTIONS)])
+        t = [uniqueness[c['name']]**(weights[c['name']]*ss(c)) for c in v['squad']]
+        sum_of_weights = sum([weights[c['name']]*ss(c) for c in v['squad']])
         try:
-            data[k]['soul'] = round(100 * sum(t) / sum_of_weights, 2)
+            # data[k]['soul'] = sum(t) / sum_of_weights #weighted
+            # data[k]['soul'] = reduce(mul,[uniqueness[c] for c in squad],1) ** (1/len(squad)) # geometric
+            # data[k]['soul'] = sum([1/uniqueness[c] for c in squad]) ** -1 # harmonic
+            # data[k]['soul'] = sum([uniqueness[c] for c in squad]) /len(squad) # unweighted
+            data[k]['soul'] = reduce(mul,[x for x in t],1) ** (1/sum_of_weights)
+            # print(data[k]['soul'])
+            data[k]['soul'] = round(100 * (data[k]['soul']), 2)
         except ZeroDivisionError:
             data[k]['soul'] = 100
     return data
@@ -263,7 +309,7 @@ if __name__ == '__main__':
     s = time()
     # for fn in ['json/data-ccbclear.json', 'json/data-cc0clear.json', 'json/data-cc1clear.json', 'json/data-cc2clear.json', 'json/data-cc3clear.json', 'json/data-cc4clear.json', 'json/data-cc5clear.json',
     # 'json/data-cc6clear.json', 'json/data-cc7clear.json']:
-    for fn in ['json/data-cc6clear.json']:
+    for fn in ['json/data-cc7clear.json']:
         with open(fn,'r') as f:
             res = calculate_soul(json.load(f))
         with open(fn,'w') as f:
