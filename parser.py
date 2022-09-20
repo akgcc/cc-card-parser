@@ -46,7 +46,7 @@ DATA_JSON = JSON_DIR.joinpath(f'data{TAG}.json')
 DATA_FIXES_JSON = JSON_DIR.joinpath(f'data{TAG}-fixes.json')
 DATA_DUPE_FIXES_JSON = JSON_DIR.joinpath(f'data{TAG}-dupes.json')
 doctorDir=Path(f'./doctors{TAG}/').resolve()
-shutil.rmtree(doctorDir) # delete entire doctor dir to remove residual images, otherwise dupes which you moved to invalid will break the parser.
+shutil.rmtree(doctorDir,True) # delete entire doctor dir to remove residual images, otherwise dupes which you moved to invalid will break the parser.
 cropDir=Path(f'./cropped{TAG}/').resolve()
 riskDir=Path(f'./risks{TAG}/').resolve()
 numsDir=Path(f'./numberTemplates/').resolve()
@@ -89,7 +89,7 @@ def update_char_table():
                 with charDataPatchPath.open('wb') as f:
                     f.write(r.content)
     if not skillDataPath.exists() or time.time() - skillDataPath.stat().st_mtime > 60*60*24:
-        with requests.get(DATA_SOURCE+'zh_CN/gamedata/excel/skill_table.json') as r:
+        with requests.get(DATA_SOURCE+'en_US/gamedata/excel/skill_table.json') as r:
             if r.status_code == 200:
                 with skillDataPath.open('wb') as f:
                     f.write(r.content)
@@ -945,6 +945,26 @@ def match_op(roi):
     best = sorted(options,key=lambda x: x[0],reverse=True)[0]
     if best[0] > .108: # .11 failed on this single image: -cc4clear/1626719849150.jpg, .105 fails in another way.
         return best
+        
+        
+    
+    ROI_EXPANDED = np.zeros((roi.shape[0]*2,roi.shape[1]*2, 4), np.uint8)
+    for c in range(0, 3):
+        ROI_EXPANDED[int(roi.shape[0]/2) : int(roi.shape[0]*1.5), int(roi.shape[1]/2) : int(roi.shape[1]*1.5),c] = roi[:,:,c]
+    def template_compare(avatar_img_name):
+        if avatar_img_name.endswith(BLANK_NAME):
+            return -1
+        orig_avatar = cv2.imread(str(avatarDir.joinpath(avatar_img_name)), cv2.IMREAD_UNCHANGED)
+        # scale based on width alone
+        rez = cv2.resize(orig_avatar, (roi.shape[1],roi.shape[1]), interpolation = cv2.INTER_AREA)
+        res = cv2.matchTemplate(ROI_EXPANDED,rez,cv2.TM_CCOEFF_NORMED)#,mask=template)
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+        return max_val
+    
+    # compare only against the best match, could pick the best match out of the list, but this isn't accurate.
+    # if template_compare(best[1]) > template_compare(str(res[0][2])):
+        # return best
+  
     # check aspect ratio, if too thin assume blank
     if abs(roi.shape[1]/roi.shape[0] - OP_ASPECT_RATIO) > .3:
         return 1,BLANK_NAME
@@ -1351,8 +1371,9 @@ def _generate_avatar_data(rebuild_all=False):
         
         # remove invalid files like "char_298_susuro5.png" or "char_340_shwazr6.png"
         invalid_ext = re.compile('\d+(\..+)')
-        avatars = [av for av in avatars if invalid_ext.sub('\\1',av.name) not in set([a.name for a in avatars]).difference([av.name])]
-        
+        all_names = set([a.name for a in avatars])
+        avatars = [av for av in avatars if invalid_ext.sub('\\1',av.name) not in all_names.difference([av.name])]
+        avatars = [av for av in avatars if av.name not in ('char_1001_amiya2_2.png',)]
         # create OPMASK, a bitwise and of ALL operator images.
         ret, OPMASK = cv2.threshold(cv2.imread(str(next(iter(avatars))), cv2.IMREAD_UNCHANGED)[:, :, 3], 0, 255, cv2.THRESH_BINARY)
         for av in avatars:
@@ -1441,7 +1462,9 @@ if __name__ == '__main__':
     # fix for broken skill icons:
     with skillDataPath.open('r') as f:
         for k,v in json.load(f).items():
-            SKILL_ICONS[k] = SKILL_ICONS.get(k, SKILL_ICONS[v['iconId']])
+            # print('icon for',k,v.get('iconId',v['skillId']))
+            if not k.startswith('sktok_'):
+                SKILL_ICONS[k] = SKILL_ICONS.get(k, SKILL_ICONS[v['iconId'] or v['skillId']])
 
     # for char in CHAR_DATA:
         # for sk in CHAR_DATA[char]['skills']:
@@ -1475,6 +1498,10 @@ if __name__ == '__main__':
     # test = './images-cc7clear/1655362131273.png'
     # test = './images-cc7clear/1655503623630.png'
     # test = './images-cc1clear/1605850911232.png'
+    # test = './images-cc8clear/1662131179112.jpg' # nian (support) recog as plat -- UNFIXED -- ( see match_op(), the line best[0] > .108, this image requires .102, but this breaks oather images.
+    # test = './images-cc2clear/1613547301651.png' # blurred op images causes failure
+    # test = './images-cc3clear/1622485108107.jpg'
+    # test = './images-cc3clear/1622485108107.jpg'
     # DEBUG = True
     # SHOW_RES = True
     # DO_ASSERTS = True
@@ -1486,9 +1513,23 @@ if __name__ == '__main__':
 
     with assertTests.open('rb') as f:
         assert_pairs = pickle.load(f)
-    # add new assert tests:
-    assert_pairs['./images-cc1clear/1606203199640.jpg']: ['char_180_amgoat_2.png', 'char_112_siege.png', 'char_337_utage_2.png', 'char_133_mm_2.png', 'char_222_bpipe_2.png', 'char_213_mostma_epoque#5.png', 'char_202_demkni.png', 'char_243_waaifu_2.png', 'char_128_plosis_epoque#3.png', 'char_285_medic2.png', 'char_215_mantic_epoque#4.png', 'char_118_yuki_2.png', 'char_151_myrtle.png']
-    assert_pairs['./images-cc4clear/1626719849150.jpg']: ['char_225_haak_2.png', 'char_172_svrash.png', 'char_358_lisa_2.png', 'char_134_ifrit_summer#1.png', 'char_222_bpipe_race#1.png', 'char_311_mudrok_2.png', 'char_350_surtr_2.png', 'char_180_amgoat_2.png', 'char_401_elysm_2.png', 'char_202_demkni_test#1.png', 'char_340_shwaz_snow#1.png', 'char_143_ghost_2.png', 'char_102_texas_2.png']
+    # assert_pairs = 
+    from pprint import pprint
+    # add new assert tests (this is an example):
+    assert_pairs['./images-cc4clear/1626450296491.jpg']: ['char_002_amiya_winter#1.png',
+                                         'char_141_nights_2.png',
+                                         'char_150_snakek_2.png',
+                                         'char_271_spikes_winter#2.png',
+                                         'char_286_cast3.png',
+                                         'char_237_gravel_winter#2.png',
+                                         'char_258_podego_2.png',
+                                         'char_151_myrtle_2.png',
+                                         'char_278_orchid.png',
+                                         'char_196_sunbr_summer#1.png',
+                                         'char_272_strong.png',
+                                         'char_345_folnic_2.png']
+    with open('asserts_tests_pairs.txt','w') as f:
+        pprint(assert_pairs,f)
     with assertTests.open('wb') as f:
         pickle.dump(assert_pairs, f)
     # must do this before anything else
@@ -1496,13 +1537,22 @@ if __name__ == '__main__':
     _generate_avatar_data(rebuild_all = (AV_HISTS_DATA.exists() and (time.time() - AV_HISTS_DATA.stat().st_mtime > 60*60*24*14)))
 
     if DO_ASSERTS and not SHOW_RES:
+        fails = 0
         for f,o in assert_pairs.items():
+            squad = set([x[0] for x in parse_squad(Path(f).resolve(),save_images=False)])
             try:
-                assert set(parse_squad(Path(f).resolve(),save_images=False)) == set(o)
+                assert squad == set(o)
             except:
-                print('failed for img',f)
+                print('failed for img',f,'expected:')
+                pprint(set(o))
+                print('got:')
+                pprint(squad)
+                fails+=1
                 raise
-        print('ALL ASSERTS PASSED'*20)
+        if fails:
+            print(f'{fails} ASSERTS FAILED '*20)
+        else:
+            print('ALL ASSERTS PASSED '*20)
         exit()
     if 0:
         # test dupe finder

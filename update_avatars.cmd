@@ -1,3 +1,3 @@
-svn export --force https://github.com/Aceship/AN-EN-Tags/trunk/img/avatars
-svn export --force https://github.com/Aceship/AN-EN-Tags/trunk/img/skills
-svn export --force https://github.com/Aceship/AN-EN-Tags/trunk/img/ui/elite
+svn export --force https://github.com/Aceship/Arknight-Images/trunk/avatars
+svn export --force https://github.com/Aceship/Arknight-Images/trunk/skills
+svn export --force https://github.com/Aceship/Arknight-Images/trunk/ui/elite

@@ -1,4 +1,22 @@
 {
 	"1613041228783.jpg": { "group": 1 },
-	"1612542643189.jpg": { "group": 0 }
+	"1612542643189.jpg": { "group": 0 },
+	"1613547301651.jpg": {
+		"squad": [
+			{ "name": "char_293_thorns", "skill": 3, "elite": 2 },
+			{ "name": "char_113_cqbw", "skill": 2, "elite": 2 },
+			{ "name": "char_401_elysm", "skill": 1, "elite": 1 },
+			{ "name": "char_102_texas", "skill": 2, "elite": 2 },
+			{ "name": "char_143_ghost", "skill": 2, "elite": 2 },
+			{ "name": "char_250_phatom", "skill": 2, "elite": 2 },
+			{ "name": "char_254_vodfox", "skill": 2, "elite": 2 },
+			{ "name": "char_202_demkni", "skill": 2, "elite": 2 },
+			{ "name": "char_128_plosis", "skill": 2, "elite": 2 },
+			{ "name": "char_172_svrash", "skill": 3, "elite": 2 },
+			{ "name": "char_400_weedy", "skill": 2, "elite": 2 },
+			{ "name": "char_017_huang", "skill": 2, "elite": 2 },
+			{ "name": "char_151_myrtle", "skill": 1, "elite": 2 }
+		],
+		"support": { "name": "char_293_thorns", "skill": 3, "elite": 2 }
+	}
 }

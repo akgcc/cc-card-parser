@@ -1,0 +1,34 @@
+{
+	"1661885212847.jpg": { "risk": 18 },
+	"1661890683858.jpg": {
+		"squad": [
+			{ "name": "char_473_mberry", "skill": 1, "elite": 2 },
+			{ "name": "char_151_myrtle", "skill": 1, "elite": 2 },
+			{ "name": "char_136_hsguma", "skill": 2, "elite": 2 },
+			{ "name": "char_2014_nian", "skill": 3, "elite": 2 },
+			{ "name": "char_102_texas", "skill": 2, "elite": 2 },
+			{ "name": "char_1013_chen2", "skill": 3, "elite": 2 },
+			{ "name": "char_179_cgbird", "skill": 3, "elite": 2 }
+		],
+		"risk": 18,
+		"support": { "name": "char_179_cgbird", "skill": 3, "elite": 2 }
+	},
+	"1661918771531.jpg": { "risk": 18 },
+	"1661963158898.jpg": { "risk": 18 },
+	"1662131179112.jpg": {
+		"squad": [
+			{ "name": "char_2014_nian", "skill": 3, "elite": 2 },
+			{ "name": "char_311_mudrok", "skill": 3, "elite": 2 },
+			{ "name": "char_1013_chen2", "skill": 3, "elite": 2 },
+			{ "name": "char_102_texas", "skill": 2, "elite": 2 },
+			{ "name": "char_202_demkni", "skill": 1, "elite": 2 },
+			{ "name": "char_107_liskam", "skill": 1, "elite": 2 },
+			{ "name": "char_151_myrtle", "skill": 1, "elite": 2 },
+			{ "name": "char_179_cgbird", "skill": 3, "elite": 2 },
+			{ "name": "char_1012_skadi2", "skill": 2, "elite": 2 },
+			{ "name": "char_222_bpipe", "skill": 2, "elite": 2 }
+		],
+		"support": { "name": "char_2014_nian", "skill": 3, "elite": 2 }
+	},
+	"1662783311535.jpg": { "group": 0 }
+}
