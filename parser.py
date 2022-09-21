@@ -946,7 +946,9 @@ def match_op(roi):
     if best[0] > .108: # .11 failed on this single image: -cc4clear/1626719849150.jpg, .105 fails in another way.
         return best
         
-        
+    # check aspect ratio, if too thin assume blank
+    if abs(roi.shape[1]/roi.shape[0] - OP_ASPECT_RATIO) > .3:
+        return 1,BLANK_NAME
     
     ROI_EXPANDED = np.zeros((roi.shape[0]*2,roi.shape[1]*2, 4), np.uint8)
     for c in range(0, 3):
@@ -957,18 +959,21 @@ def match_op(roi):
         orig_avatar = cv2.imread(str(avatarDir.joinpath(avatar_img_name)), cv2.IMREAD_UNCHANGED)
         # scale based on width alone
         rez = cv2.resize(orig_avatar, (roi.shape[1],roi.shape[1]), interpolation = cv2.INTER_AREA)
-        res = cv2.matchTemplate(ROI_EXPANDED,rez,cv2.TM_CCOEFF_NORMED)#,mask=template)
+        res = cv2.matchTemplate(ROI_EXPANDED,rez,cv2.TM_CCOEFF_NORMED,mask=rez[:, :, 3])
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
         return max_val
     
-    # compare only against the best match, could pick the best match out of the list, but this isn't accurate.
-    # if template_compare(best[1]) > template_compare(str(res[0][2])):
-        # return best
-  
-    # check aspect ratio, if too thin assume blank
-    if abs(roi.shape[1]/roi.shape[0] - OP_ASPECT_RATIO) > .3:
-        return 1,BLANK_NAME
+    
+    # print('verifying match with templates:', best[1],res[0][2].name)
+    # print(template_compare(best[1]) ,'>', template_compare(str(res[0][2])))
+    # cv2.imshow('ROI_EXPANDED',ROI_EXPANDED)
+    # cv2.waitKey()
+    
+    # compare ONLY against the best match, DO NOT compare against entire list (options) or sublist as this will NOT be accurate.
+    if template_compare(best[1]) > template_compare(str(res[0][2])):
+        return best
     return res[0][0],res[0][2].name
+    
 def match_skill(opimg, opname, full_img_height):
     ' return skill # 1-3 or 0 if no skill or invalid operator '
     opkey = '_'.join(opname.split('_')[:3]).split('.')[0]
@@ -1502,6 +1507,9 @@ if __name__ == '__main__':
     # test = './images-cc2clear/1613547301651.png' # blurred op images causes failure
     # test = './images-cc3clear/1622485108107.jpg'
     # test = './images-cc3clear/1622485108107.jpg'
+    # test = './images-cc3clear/1622790198429.png'
+    # test = './images-cc4clear/1626224964437.jpg'
+    # test = './images-cc3clear/1623345714607.jpg'
     # DEBUG = True
     # SHOW_RES = True
     # DO_ASSERTS = True
@@ -1516,7 +1524,7 @@ if __name__ == '__main__':
     # assert_pairs = 
     from pprint import pprint
     # add new assert tests (this is an example):
-    assert_pairs['./images-cc4clear/1626450296491.jpg']: ['char_002_amiya_winter#1.png',
+    assert_pairs['./images-cc4clear/1626450296491.jpg']=['char_002_amiya_winter#1.png',
                                          'char_141_nights_2.png',
                                          'char_150_snakek_2.png',
                                          'char_271_spikes_winter#2.png',
@@ -1528,6 +1536,9 @@ if __name__ == '__main__':
                                          'char_196_sunbr_summer#1.png',
                                          'char_272_strong.png',
                                          'char_345_folnic_2.png']
+    assert_pairs['./images-cc3clear/1622790198429.png']= ['char_358_lisa.png', 'char_401_elysm_2.png', 'char_196_sunbr_summer#1.png', 'char_101_sora_summer#1.png', 'char_172_svrash_snow#1.png', 'char_017_huang_2.png', 'char_150_snakek.png', 'char_144_red.png', 'char_010_chen_2.png', 'char_263_skadi_summer#3.png', 'char_171_bldsk_2.png', 'char_143_ghost_2.png', 'char_391_rosmon_2.png']
+
+
     with open('asserts_tests_pairs.txt','w') as f:
         pprint(assert_pairs,f)
     with assertTests.open('wb') as f:
