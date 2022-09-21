@@ -1,0 +1,7 @@
+https://old.reddit.com/r/arknights/comments/j64pci/what_font_does_arknights_use/
+https://fonts.adobe.com/fonts/novecento-sans#fonts-section
+use the string 0123456789 with font size 84
+screenshot "Novecento sans wide Normal"
+invert colors
+threshold in gimp on value channel [75:255] values are from parser.py line 275
+export as individual numbers

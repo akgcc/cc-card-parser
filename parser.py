@@ -37,6 +37,10 @@ OP_ASPECT_RATIO = 130/156
 SKILL_ICON_SIZE = 34/720 # at 720p
 ELITE_ICON_SIZE = (25/720, 24/720) # at 720p # not a square its actually 25/24
 TAG = sys.argv[1]
+try:
+    TAG_CC_NUMBER = int(re.search('[b\d]+',TAG).group(0))
+except:
+    TAG_CC_NUMBER = -1
 SQUADS = {}
 OUTPUT_IMG_QUALITY = 80
 OUTPUT_IMG_TYPE = '.jpg' # need to replace instances of IMWRITE_JPEG_QUALITY if you change this
@@ -50,6 +54,7 @@ shutil.rmtree(doctorDir,True) # delete entire doctor dir to remove residual imag
 cropDir=Path(f'./cropped{TAG}/').resolve()
 riskDir=Path(f'./risks{TAG}/').resolve()
 numsDir=Path(f'./numberTemplates/').resolve()
+bigNumsDir=Path(f'./riskNumbers/').resolve()
 imagesDir=Path(f'./images{TAG}/').resolve()
 thumbsDir=Path(f'./thumbs{TAG}/').resolve()
 
@@ -253,14 +258,28 @@ def crop_titlebar(im):
 def parse_risks(data):
 
     testimg = 'asdf'#'1599804643036.jpg'#'1599766639097.jpg'#'1605112361906.jpg'#'1605544770468.png'#'1605204799361.png'#'1605132302340.png'#'1605156221752.png'
-    # expects 2 digits, doesn't work on occluded numbers.
-    RISK_NUMBER_TEMPLATES = [cv2.cvtColor(cv2.imread(str(numsDir.joinpath(f'{i}.png'))),cv2.COLOR_BGR2GRAY) for i in range(10)]
-    LARGE_RISK_NUMBER_TEMPLATES = [cv2.resize(im,(int(im.shape[1]*1.15),int(im.shape[0]*1.15))) for im in RISK_NUMBER_TEMPLATES]
+    # expects 2 digits, ~~doesn't work on occluded numbers~~ somewhat works on occluded numbers
+    # SETS[0] = small sized numbers (cc <= 7 on global)
+    RISK_NUMBER_TEMPLATE_SETS = [
+        [cv2.cvtColor(cv2.imread(str(numsDir.joinpath(f'{i}.png'))),cv2.COLOR_BGR2GRAY) for i in range(10)]
+    ]
+    # SETS[1] = large sized risk numbers
+    RISK_NUMBER_TEMPLATE_SETS.append([cv2.cvtColor(cv2.imread(str(bigNumsDir.joinpath(f'{i}.png'))),cv2.COLOR_BGR2GRAY) for i in range(10)])
+    # SETS[2] = large sized risk numbers with right edge cut off
+    RISK_NUMBER_TEMPLATE_SETS.append([im.copy() for im in RISK_NUMBER_TEMPLATE_SETS[-1]])
+    for im in RISK_NUMBER_TEMPLATE_SETS[-1]:
+        # cut based on width of number, so thin numbers like "1" won't be trimmed at all.
+        h,w=im.shape
+        im[0:h, min(40-14,w):w] = 0
+    # RISK_NUMBER_TEMPLATE_SETS.append([cv2.resize(im,(int(im.shape[1]*1.15),int(im.shape[0]*1.15))) for im in RISK_NUMBER_TEMPLATE_SETS[0]])
     # RISK_NUMBER_TEMPLATES = [cv2.Canny(image=cv2.GaussianBlur(im, (3,3), 0), threshold1=100, threshold2=200) for im in RISK_NUMBER_TEMPLATES]
     # LARGE_RISK_NUMBER_TEMPLATES = [cv2.Canny(image=cv2.GaussianBlur(im, (3,3), 0), threshold1=100, threshold2=200) for im in LARGE_RISK_NUMBER_TEMPLATES]
     riskpaths = list(riskDir.resolve().glob('*.*'))[:]
     for path in riskpaths:
-        # print(path.name)
+        # testimg = '1661918771531.png'
+        # if path.name!=testimg:
+            # continue
+        
         im = cv2.imread(str(path))
         hsv = cv2.cvtColor(im, cv2.COLOR_BGR2HSV)
         lower_gray = np.array([0,0,75])
@@ -290,20 +309,17 @@ def parse_risks(data):
         # digits in jp client are scaled by ~115%
         # if first match in (1,2,3) we can assume?? its the left digit (we can't)
         baseline = None
-        template_set = (0,1) # 0 is normal template, 1 is large
+        template_set = [1,2] # 0 is normal template, 1 is large, 2 is large with right side cut off
+        if TAG_CC_NUMBER < 8: # starting in cc8, global server also uses big numbers.
+            template_set.append(0)
         for attempt in range(2):
             results = []
             for i in range(10):
-                if 0 in template_set:
-                    template = RISK_NUMBER_TEMPLATES[i]
+                for t in template_set:
+                    template = RISK_NUMBER_TEMPLATE_SETS[t][i]
                     res = cv2.matchTemplate(mask,template,cv2.TM_CCOEFF_NORMED)#,mask=template)
                     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
-                    results.append((max_val,i,max_loc,0))
-                if 1 in template_set:
-                    template = LARGE_RISK_NUMBER_TEMPLATES[i]
-                    res = cv2.matchTemplate(mask,template,cv2.TM_CCOEFF_NORMED)#,mask=template)
-                    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
-                    results.append((max_val,i,max_loc,1))
+                    results.append((max_val,i,max_loc,t))
             if path.name == testimg:
                 print(sorted(results))
             if 0 or baseline != None:
@@ -312,15 +328,17 @@ def parse_risks(data):
             if path.name == testimg:
                 print(sorted(results))
             score,num,loc,ts = sorted(results)[-1]
+            
             if path.name == testimg:
                 print(loc)
             if baseline == None:
                 baseline = loc[1]
             # if len(template_set) > 1:
                 # template_set = (ts,)
-            h,w=RISK_NUMBER_TEMPLATES[i].shape
+            h,w=RISK_NUMBER_TEMPLATE_SETS[ts][num].shape
             mask[loc[1]:loc[1]+h, loc[0]:loc[0]+w]=0
             if path.name == testimg:
+                cv2.imshow('best match',RISK_NUMBER_TEMPLATE_SETS[ts][num])
                 cv2.imshow('i',mask)
                 cv2.waitKey()
             if score > .5:#.25: #was .5 before edge # was .2
@@ -333,9 +351,9 @@ def parse_risks(data):
         if loc_x_diff > 44:# or (risk < 18 or risk > 35):
             risk = int(sorted(digits, key=lambda x: x[2])[-1][1])
         if path.with_suffix(OUTPUT_IMG_TYPE).name in data:
-            if path.name == testimg:
-                print(risk)
             data[path.with_suffix(OUTPUT_IMG_TYPE).name]['risk'] = risk
+        if path.name == testimg:
+            print('risk:',risk)
     return data
 
 
@@ -1510,6 +1528,7 @@ if __name__ == '__main__':
     # test = './images-cc3clear/1622790198429.png'
     # test = './images-cc4clear/1626224964437.jpg'
     # test = './images-cc3clear/1623345714607.jpg'
+    # test = './images-cc8clear/1661885212847.jpg'
     # DEBUG = True
     # SHOW_RES = True
     # DO_ASSERTS = True
@@ -1592,6 +1611,7 @@ if __name__ == '__main__':
                 raise
     # if len(paths)==1:
     if test:
+        # print(parse_risks({}))
         exit()
     with SQUAD_JSON.open('w') as f:
         json.dump(SQUADS,f)
