@@ -141,27 +141,28 @@ def bubble_duplicates(data):
         while v['duplicate_of'] in data and 'duplicate_of' in data[v['duplicate_of']]:
             v['duplicate_of'] = data[v['duplicate_of']]['duplicate_of']
     return data
-def group_duplicates(data):
+def group_duplicates(data, remove_temp_fields = True):
     # instead of using "duplicate_of", group all dupes into "dupe_group"s
-    # just use this inefficient method:
+    # if remove_temp_fields is False, will not delete the "duplicate_of" field from your data, use ONLY for testing.
     groups = []
     for k,v in data.items():
         if 'duplicate_of' not in v:
             continue
         for g in groups:
-            if v['duplicate_of'] in g:
-                g.append(k)
+            if any(x in g for x in (k, v['duplicate_of'])): # if any of these 2 values is in g
+                g|={k, v['duplicate_of']}
                 break
         else:
-            groups.append([k,v['duplicate_of']])
+            groups.append(set([k,v['duplicate_of']]))
     # add to data, but also remove all duplicate_of to save space.
     group_number = 0
     for g in groups:
         for k in g:
             data[k]['dupe_group'] = f'{group_number}{TAG}'
         group_number+=1
-    for v in data.values():
-        v.pop('duplicate_of',None)
+    if remove_temp_fields:
+        for v in data.values():
+            v.pop('duplicate_of',None)
     return data
 def clean_output_folders(data):
     for dir in (cropDir,doctorDir,thumbsDir,riskDir):
@@ -547,7 +548,6 @@ def remove_duplicates(data):
             groups.setdefault(b[0],[]).append(a[0])
     with DATA_DUPE_FIXES_JSON.open('w') as f:
         json.dump(dupes_json, f)
-        
     grouped = []
     for k in list(groups.keys()):
         if k in groups:
@@ -751,6 +751,7 @@ def remove_dupes_ssim(data):
             del groups[k]
             grouped.append(merge(set([k]),a))
     print('TOTAL DUPES FOUND:',sum([len(v) for v in grouped]))
+    
     for i,g in enumerate(grouped):
         dupes = sorted(g,key=lambda x: x.stem)# sort by filename, this makes a big assumption that all filenames are timestamps.
         com = [sim_map.get(a.name+b.name, sim_map.get(b.name+a.name,[0]))[0]>HIGH_TH for a,b in itertools.combinations(dupes,2)]
@@ -1593,9 +1594,11 @@ if __name__ == '__main__':
         if TAG != '-ccbclear':
             with DATA_JSON.open('r') as f:
                 data = json.load(f)
+            fix_json_data(data)
             remove_duplicates(data)
-            # with DATA_JSON.open('w') as f:
-                # json.dump(data,f)
+            group_duplicates(data,False)
+            with open('dupe_testing.txt','w') as f:
+                json.dump(data,f)
         exit()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
