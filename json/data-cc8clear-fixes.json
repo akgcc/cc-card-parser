@@ -1,5 +1,4 @@
 {
-	"1661885212847.jpg": { "risk": 18 },
 	"1661890683858.jpg": {
 		"squad": [
 			{ "name": "char_473_mberry", "skill": 1, "elite": 2 },
@@ -13,8 +12,6 @@
 		"risk": 18,
 		"support": { "name": "char_179_cgbird", "skill": 3, "elite": 2 }
 	},
-	"1661918771531.jpg": { "risk": 18 },
-	"1661963158898.jpg": { "risk": 18 },
 	"1662131179112.jpg": {
 		"squad": [
 			{ "name": "char_2014_nian", "skill": 3, "elite": 2 },

@@ -65,6 +65,7 @@ blankTemplate = Path('./BLANK_720.png').resolve()
 charDataPath = Path('./character_table.json').resolve()
 crisisDataPath = Path('./crisis_table.json').resolve()
 skillDataPath = Path('./skill_table.json').resolve()
+uniequipDataPath = Path('./uniequip_table.json').resolve()
 charDataPatchPath = Path('./char_patch_table.json').resolve()
 failedParses = Path('./FAILED_PARSES.txt').resolve()
 assertTests = Path('./assert_tests.p').resolve()
@@ -76,6 +77,7 @@ DATA_SOURCE = "https://raw.githubusercontent.com/Aceship/AN-EN-Tags/master/json/
 CC_DATA_SOURCE = 'https://raw.githubusercontent.com/Kengxxiao/ArknightsGameData/master/'
 # DATA_SOURCE = 'https://raw.githubusercontent.com/Kengxxiao/ArknightsGameData/master/'
 # CC_DATA_SOURCE = DATA_SOURCE
+DATA_SOURCE = CC_DATA_SOURCE
 # update character_table.json, and patch with char_patch_table
 def update_char_table():
     if not crisisDataPath.exists() or time.time() - crisisDataPath.stat().st_mtime > 60*60*24:
@@ -98,7 +100,11 @@ def update_char_table():
             if r.status_code == 200:
                 with skillDataPath.open('wb') as f:
                     f.write(r.content)
-
+    if not uniequipDataPath.exists() or time.time() - uniequipDataPath.stat().st_mtime > 60*60*24:
+        with requests.get(DATA_SOURCE+'en_US/gamedata/excel/uniequip_table.json') as r:
+            if r.status_code == 200:
+                with uniequipDataPath.open('wb') as f:
+                    f.write(r.content)
     with charDataPath.open('rb') as f:
         data = json.load(f)
     with charDataPatchPath.open('rb') as f:
@@ -556,15 +562,26 @@ def remove_duplicates(data):
             grouped.append(merge(set([k]),a))
     print('TOTAL DUPES FOUND:',sum([len(v) for v in grouped]))
     for i,g in enumerate(grouped):
-        dupes = sorted(g,key=lambda x: x.stem)# sort by filename, this makes a big assumption that all filenames are timestamps.
+        dupes = sorted(g,key=lambda x: str(int(data[x.with_suffix(OUTPUT_IMG_TYPE).name]['risk'] >= 18) and x.stem))# sort by filename, this makes a big assumption that all filenames are timestamps.
         groups = set([data[dupes[-1].with_suffix(OUTPUT_IMG_TYPE).name]['group']])
         # res = np.concatenate([cv_ims[p] for p in dupes], axis=1)
         # cv2.imshow('dupegroup', res)
         # cv2.waitKey(0)
+        
         for d in dupes[-2::-1]:# reversed but skip first (prev last) element
             group = data[d.with_suffix(OUTPUT_IMG_TYPE).name]['group']
             archiveClear(d.with_suffix(OUTPUT_IMG_TYPE), dupes[-1].with_suffix(OUTPUT_IMG_TYPE), group in groups)
             groups.add(group)
+        
+        # skip_sub18 = data[dupes[-1].with_suffix(OUTPUT_IMG_TYPE).name]['risk'] < 18
+        # for d in dupes[-1 if skip_sub18 else -2::-1]:# reversed but skip first (prev last) element
+            # group = data[d.with_suffix(OUTPUT_IMG_TYPE).name]['group']
+            # risk = data[d.with_suffix(OUTPUT_IMG_TYPE).name]['risk']
+            # if skip_sub18 and risk >=18: # if skip_sub18, don't archive first r18+ clear:
+                # skip_sub18 = False
+            # else:
+                # archiveClear(d.with_suffix(OUTPUT_IMG_TYPE), dupes[-1].with_suffix(OUTPUT_IMG_TYPE), group in groups)
+                # groups.add(group)
 def remove_dupes_ssim(data):
     # old dupe finder, before switching to phash
     global MANUAL_DUPE_VERIFICATION
@@ -1530,6 +1547,7 @@ if __name__ == '__main__':
     # test = './images-cc4clear/1626224964437.jpg'
     # test = './images-cc3clear/1623345714607.jpg'
     # test = './images-cc8clear/1661885212847.jpg'
+    # test = './images-cc4clear/1626735279934.png'
     # DEBUG = True
     # SHOW_RES = True
     # DO_ASSERTS = True
@@ -1627,6 +1645,10 @@ if __name__ == '__main__':
     print('parsing risks...')
     parse_risks(data)
     fix_json_data(data)
+    # print('removing clears below r18...') # doesn't quite work, breaks on manually added dupes (that included <18)
+    # for k in list(data):
+        # if data[k]['risk'] < 18:
+            # del data[k]
     print('removing dupes...')
     if TAG != '-ccbclear':
         remove_duplicates(data)
