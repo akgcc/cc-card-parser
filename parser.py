@@ -1284,11 +1284,11 @@ def parse_squad(path, save_images = True):
         print(operator_list)
     # now crop off right side to get 16:9, BUT not less than crop_border
     # if img is too wide as a result, scale it smaller.
-    im = im[:,0:max(1280,crop_border)]
+    cropped_im = im[:,0:max(1280,crop_border)]
     if DEBUG or SHOW_RES:
         result_disp = result_disp[:,0:max(1280,crop_border)]
-    if im.shape[1] > 1280:
-        im=cv2.resize(im, (1280,720), interpolation = INTERPOLATION)
+    if cropped_im.shape[1] > 1280:
+        im=cv2.resize(cropped_im, (1280,720), interpolation = INTERPOLATION)
         if DEBUG or SHOW_RES:
             result_disp=cv2.resize(result_disp, (1280,720), interpolation = INTERPOLATION)
  
@@ -1318,7 +1318,8 @@ def parse_squad(path, save_images = True):
         if SHOW_RES or DEBUG:
             cv2.rectangle(result_disp,(nn_box[0],nn_box[1]),(nn_box[2],nn_box[3]),(200,200,0),2)
         
-        nn = im[int(height*nickname_coords[0]):int(height*(nickname_coords[1])), int(height*nickname_coords[2]):int(height*(nickname_coords[3]))]
+        # use cropped image (not rescaled) to get doctor name, as the left side of the screen doesn't change at wider resolutions.
+        nn = cropped_im[int(height*nickname_coords[0]):int(height*(nickname_coords[1])), int(height*nickname_coords[2]):int(height*(nickname_coords[3]))]
         cv2.imwrite(str(doctorDir.joinpath(path.name).with_suffix('.png')),nn)
         
     if DEBUG or SHOW_RES:
