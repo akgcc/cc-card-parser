@@ -36,5 +36,22 @@
 			{ "name": "char_151_myrtle", "skill": 1, "elite": 2 }
 		]
 	},
-	"1637877308582.jpg": { "group": 1 }
+	"1637877308582.jpg": { "group": 1 },
+	"1626735279934.jpg": {
+		"squad": [
+			{ "name": "char_180_amgoat", "skill": 3, "elite": 2 },
+			{ "name": "char_281_popka", "skill": 1, "elite": 1 },
+			{ "name": "char_502_nblade", "skill": 0, "elite": 0 },
+			{ "name": "char_209_ardign", "skill": 1, "elite": 1 },
+			{ "name": "char_278_orchid", "skill": 1, "elite": 1 },
+			{ "name": "char_122_beagle", "skill": 1, "elite": 1 },
+			{ "name": "char_500_noirc", "skill": 0, "elite": 0 },
+			{ "name": "char_284_spot", "skill": 1, "elite": 1 },
+			{ "name": "char_141_nights", "skill": 2, "elite": 1 },
+			{ "name": "char_283_midn", "skill": 1, "elite": 1 },
+			{ "name": "char_208_melan", "skill": 1, "elite": 1 },
+			{ "name": "char_237_gravel", "skill": 2, "elite": 1 },
+			{ "name": "char_151_myrtle", "skill": 1, "elite": 2 }
+		]
+	}
 }
