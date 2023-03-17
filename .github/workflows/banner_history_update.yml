@@ -1,7 +1,7 @@
 name: Update banner history
 on:
   schedule:
-    - cron: "0 0 * * 0"
+    - cron: "0 0 * * 0,5"
 jobs:
   run:
     name: Update banner history
