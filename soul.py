@@ -238,7 +238,7 @@ def calculate_soul(data):
     # print(sorted(tally.values()))
     rms = statistics.mean([v**2 for v in tally.values()])**.5 # quadratic mean
     MIN_WEIGHT = .95
-    ELITE_SOUL_EXEMPTIONS = ['char_214_kafka']#,'char_144_red','char_243_waaifu']
+    ELITE_SOUL_EXEMPTIONS = ['char_214_kafka','char_497_ctable']#,'char_144_red','char_243_waaifu']
     ELITE_SOUL_SCALE = [-.5,.75,1]
     weights = {k:max(MIN_WEIGHT,abs(v-rms)/rms) for k,v in tally.items()}
     # weights = {k:max(MIN_WEIGHT,abs(v)/rms) for k,v in tally.items()}

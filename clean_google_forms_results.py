@@ -49,6 +49,7 @@ for a in ANSWERS:
         metric,name = QUESTION_MAP[a[0]]
         metric = metric.strip()
         name = name.strip()
+        # print(a)
         if metric not in BOOLEAN_QUESTIONS:
             # print(QUESTION_MAP[a[0]],a)
             m = ANSWER_MAP.setdefault(name, {})
@@ -64,7 +65,7 @@ for a in ANSWERS:
             # m['E2'] = _map['Yes and E2'] / total
             # m['Ownership'] /= total
             if metric == 'Promotion level':
-                m['Ownership'] = _map['Own'] + _map['E2'] + _map['E2 90']
+                m['Ownership'] = _map['Own'] + _map['E2'] + _map['E2 90'] + _map.get('E1',0)
                 m['E2'] = (_map['E2'] + _map['E2 90'] ) / total
                 E2_COUNT_PER_OP[name] = (_map['E2'] + _map['E2 90'] )
                 m['Ownership'] /= total

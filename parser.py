@@ -63,6 +63,7 @@ skillDir=Path('./skills/').resolve()
 eliteDir=Path('./elite/').resolve()
 blankTemplate = Path('./BLANK_720.png').resolve()
 charDataPath = Path('./character_table.json').resolve()
+skinDataPath = Path('./skin_table.json').resolve()
 crisisDataPath = Path('./crisis_table.json').resolve()
 skillDataPath = Path('./skill_table.json').resolve()
 uniequipDataPath = Path('./uniequip_table.json').resolve()
@@ -104,6 +105,11 @@ def update_char_table():
         with requests.get(DATA_SOURCE+'en_US/gamedata/excel/uniequip_table.json') as r:
             if r.status_code == 200:
                 with uniequipDataPath.open('wb') as f:
+                    f.write(r.content)
+    if not skinDataPath.exists() or time.time() - skinDataPath.stat().st_mtime > 60*60*24:
+        with requests.get(DATA_SOURCE+'en_US/gamedata/excel/skin_table.json') as r:
+            if r.status_code == 200:
+                with skinDataPath.open('wb') as f:
                     f.write(r.content)
     with charDataPath.open('rb') as f:
         data = json.load(f)
@@ -1410,12 +1416,21 @@ def _generate_avatar_data(rebuild_all=False):
 
         av_hists = []
         avatars = list(avatarDir.glob('char_*'))#[:1]
+        # imgset =  set([a.stem for a in avatars])
+        with skinDataPath.open('rb') as f:
+            skindata = json.load(f)
+        avatardataset = set([v['avatarId'] for k,v in skindata['charSkins'].items()])
         
         # remove invalid files like "char_298_susuro5.png" or "char_340_shwazr6.png"
-        invalid_ext = re.compile('\d+(\..+)')
-        all_names = set([a.name for a in avatars])
-        avatars = [av for av in avatars if invalid_ext.sub('\\1',av.name) not in all_names.difference([av.name])]
+        # (replaced this by just comparing against skin_table.json)
+        # invalid_ext = re.compile('\d+(\..+)')
+        # all_names = set([a.name for a in avatars])
+        # avatars = [av for av in avatars if invalid_ext.sub('\\1',av.name) not in all_names.difference([av.name])]
+        
+        # remove specific ops (guardmiya in this case)
         avatars = [av for av in avatars if av.name not in ('char_1001_amiya2_2.png',)]
+        # compare against actual data to avoid repeat of sus situation
+        avatars = [av for av in avatars if av.stem in avatardataset] 
         # create OPMASK, a bitwise and of ALL operator images.
         ret, OPMASK = cv2.threshold(cv2.imread(str(next(iter(avatars))), cv2.IMREAD_UNCHANGED)[:, :, 3], 0, 255, cv2.THRESH_BINARY)
         for av in avatars:
@@ -1549,6 +1564,7 @@ if __name__ == '__main__':
     # test = './images-cc3clear/1623345714607.jpg'
     # test = './images-cc8clear/1661885212847.jpg'
     # test = './images-cc4clear/1626735279934.png'
+    # test = './images-cc4clear/1626589439930.png'
     # DEBUG = True
     # SHOW_RES = True
     # DO_ASSERTS = True
@@ -1584,6 +1600,8 @@ if __name__ == '__main__':
         pickle.dump(assert_pairs, f)
     # must do this before anything else
     # to ensure data isn't stale, check file mtime (stale is over 14 days old)
+    # _generate_avatar_data(True)
+    # exit()
     _generate_avatar_data(rebuild_all = (AV_HISTS_DATA.exists() and (time.time() - AV_HISTS_DATA.stat().st_mtime > 60*60*24*14)))
 
     if DO_ASSERTS and not SHOW_RES:
