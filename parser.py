@@ -49,6 +49,7 @@ SQUAD_JSON = JSON_DIR.joinpath(f'squads{TAG}.json')
 DATA_JSON = JSON_DIR.joinpath(f'data{TAG}.json')
 DATA_FIXES_JSON = JSON_DIR.joinpath(f'data{TAG}-fixes.json')
 DATA_DUPE_FIXES_JSON = JSON_DIR.joinpath(f'data{TAG}-dupes.json')
+RED_MAX_TEST = 0
 doctorDir=Path(f'./doctors{TAG}/').resolve()
 shutil.rmtree(doctorDir,True) # delete entire doctor dir to remove residual images, otherwise dupes which you moved to invalid will break the parser.
 cropDir=Path(f'./cropped{TAG}/').resolve()
@@ -70,6 +71,7 @@ uniequipDataPath = Path('./uniequip_table.json').resolve()
 charDataPatchPath = Path('./char_patch_table.json').resolve()
 failedParses = Path('./FAILED_PARSES.txt').resolve()
 assertTests = Path('./assert_tests.p').resolve()
+redTemplates = [Path('./RED.png').resolve(),Path('./RED2.png').resolve()]
 CC_START_DATES = {
 '-ccbclear':1591995600#Friday, June 12, 2020 9:00:00 PM GMT
 }
@@ -186,6 +188,9 @@ def generate_data_json():
         data = json.load(f)
     for k,v in data.items():
         data[k] = {'squad': [{'name': '_'.join(i[0].split('_')[:3]).split('.')[0], 'skill': i[1], 'elite': i[2]} for i in v[0]],'group':clear_group(k),'support':{'name': '_'.join(v[1][0].split('_')[:3]).split('.')[0], 'skill': v[1][1], 'elite': v[1][2]} if v[1] else {'name':None}}
+        if len(v)>2:
+            # add red tag
+            data[k]['red'] = v[2]
     for k in list(data.keys()):
         if not cropDir.joinpath(k).exists() and not cropDir.joinpath('duplicates/').joinpath(k).exists():
             del data[k]
@@ -270,7 +275,7 @@ def crop_titlebar(im):
     return im
 def parse_risks(data):
 
-    testimg = 'asdf'#'1599804643036.jpg'#'1599766639097.jpg'#'1605112361906.jpg'#'1605544770468.png'#'1605204799361.png'#'1605132302340.png'#'1605156221752.png'
+    testimg = '.png'#'1599804643036.jpg'#'1599766639097.jpg'#'1605112361906.jpg'#'1605544770468.png'#'1605204799361.png'#'1605132302340.png'#'1605156221752.png'
     # expects 2 digits, ~~doesn't work on occluded numbers~~ somewhat works on occluded numbers
     # SETS[0] = small sized numbers (cc <= 7 on global)
     RISK_NUMBER_TEMPLATE_SETS = [
@@ -354,14 +359,18 @@ def parse_risks(data):
                 cv2.imshow('best match',RISK_NUMBER_TEMPLATE_SETS[ts][num])
                 cv2.imshow('i',mask)
                 cv2.waitKey()
+            if path.name == testimg:
+                print('scored:',score)
             if score > .5:#.25: #was .5 before edge # was .2
                 digits.append((loc[0],num, score))
         loc_x_diff = 0
         if len(digits)> 1:
             loc_x_diff = abs(digits[0][0] - digits[1][0])
-        # print(loc_x_diff)
+        if path.name == testimg:
+            print('x diff of',loc_x_diff)
         risk = int('0'+''.join([str(i[1]) for i in sorted(digits)]))
-        if loc_x_diff > 44:# or (risk < 18 or risk > 35):
+        # if loc_x_diff > 44:# or (risk < 18 or risk > 35):
+        if loc_x_diff > 48:# bit more lenient
             risk = int(sorted(digits, key=lambda x: x[2])[-1][1])
         if path.with_suffix(OUTPUT_IMG_TYPE).name in data:
             data[path.with_suffix(OUTPUT_IMG_TYPE).name]['risk'] = risk
@@ -1090,19 +1099,20 @@ def quick_crop(im):
         cv2.waitKey()
     return im[y:y+h,x:x+w]
 def parse_squad(path, save_images = True):
+    global RED_MAX_TEST
     # return list of ops in a card image
     # also generates extra images: cropped image, doctor and risk image
     INTERPOLATION = cv2.INTER_AREA
     INTERPOLATION_ENLARGE = cv2.INTER_CUBIC
     template = cv2.cvtColor(cv2.imread(str(blankTemplate)), cv2.COLOR_BGR2GRAY)
-    oim = cv2.imread(str(path))
+    orig = cv2.imread(str(path))
     if DEBUG:
-        cv2.imshow('orig',oim)
+        cv2.imshow('orig',orig)
         cv2.waitKey()
     print(f'processing {path}...')
     # initial cropping, handles most cases
 
-    oim = quick_crop(oim)
+    oim = quick_crop(orig)
     oim = crop_titlebar(oim)
     oim = crop_sidebars(oim)
     
@@ -1300,7 +1310,22 @@ def parse_squad(path, save_images = True):
  
     # convert path to correct img type
     path = path.with_suffix(OUTPUT_IMG_TYPE)
-    SQUADS[path.name] = (operator_list,support_op)
+    # CC12 exclusive:
+    if TAG == '-cc12clear':
+        is_red = False
+        for fn in redTemplates:
+            template = cv2.imread(str(fn))
+            result = cv2.matchTemplate(orig, template, cv2.TM_CCOEFF_NORMED)
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+            if max_val > .61:
+                is_red = True
+            else:
+                RED_MAX_TEST = max(max_val,RED_MAX_TEST)
+            if DEBUG or SHOW_RES:
+                print(max_val)
+        SQUADS[path.name] = (operator_list,support_op,is_red)
+    else:
+        SQUADS[path.name] = (operator_list,support_op)
     if save_images:
         # cv2.imwrite(str(cropDir.joinpath(path.name)),im)
         
@@ -1328,6 +1353,7 @@ def parse_squad(path, save_images = True):
         nn = cropped_im[int(height*nickname_coords[0]):int(height*(nickname_coords[1])), int(height*nickname_coords[2]):int(height*(nickname_coords[3]))]
         cv2.imwrite(str(doctorDir.joinpath(path.name).with_suffix('.png')),nn)
         
+
     if DEBUG or SHOW_RES:
         cv2.imshow(path.name,result_disp)
         cv2.waitKey()
@@ -1428,9 +1454,15 @@ def _generate_avatar_data(rebuild_all=False):
         # avatars = [av for av in avatars if invalid_ext.sub('\\1',av.name) not in all_names.difference([av.name])]
         
         # remove specific ops (guardmiya in this case)
-        avatars = [av for av in avatars if av.name not in ('char_1001_amiya2_2.png',)]
+        # avatars = [av for av in avatars if av.name not in ('char_1001_amiya2_2.png',)]
+        # print('invalid avatars:',[av for av in avatars if av.stem not in avatardataset])
+        # return
         # compare against actual data to avoid repeat of sus situation
-        avatars = [av for av in avatars if av.stem in avatardataset] 
+        avatars = [av for av in avatars if av.stem in avatardataset]
+        
+        # print('avatars:',[av for av in avatars if 'forcer' in av.stem])
+        # return
+        
         # create OPMASK, a bitwise and of ALL operator images.
         ret, OPMASK = cv2.threshold(cv2.imread(str(next(iter(avatars))), cv2.IMREAD_UNCHANGED)[:, :, 3], 0, 255, cv2.THRESH_BINARY)
         for av in avatars:
@@ -1565,6 +1597,15 @@ if __name__ == '__main__':
     # test = './images-cc8clear/1661885212847.jpg'
     # test = './images-cc4clear/1626735279934.png'
     # test = './images-cc4clear/1626589439930.png'
+    # test = './images-cc11clear/1688293079922.jpg'
+    # test = './images-cc11clear/1687585935540.jpg'
+    # test = './images-cc12clear/1696195487527.jpg'
+    # test = './images-cc12clear/1696187854446.png'
+    # test = './images-cc12clear/1696244155856.jpg'
+    # test = './images-cc12clear/1696191299604.jpg'
+    # test = './images-cc12clear/1696214212168.png'
+    # test = './images-cc12clear/1696592761995.jpg'
+    # test = './images-cc12clear/1697368211335.jpg'
     # DEBUG = True
     # SHOW_RES = True
     # DO_ASSERTS = True
@@ -1681,7 +1722,7 @@ if __name__ == '__main__':
     clean_output_folders(data)
     with DATA_JSON.open('w') as f:
         json.dump(data,f)
-        
+    print('MAX NON-RED MATCH:',RED_MAX_TEST)
     # merge all data files into one combined -cc-all
     full = {}
     for path in JSON_DIR.glob('data-*clear.json'):

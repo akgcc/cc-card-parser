@@ -1,7 +1,8 @@
+# place this file in cc/sounds/
 # removes sound files that are not used in story segments (by adding to .gitignore)
 # converts all sounds to mp3 to save space.
 from pathlib import Path
-import json,time,requests,pydub
+import json,time,requests,pydub,re
 DELETE_UNUSED_SOUNDS = True
 RECONVERT_ALL_FILES = False # convert all to mp3 even if already exists WARNING: TAKES FOREVER
 dirpath = r'.\assets\torappu\dynamicassets\audio'
@@ -17,7 +18,10 @@ usedFiles = set()
 for v in vars.values():
     try:
         if (v.lower().startswith('sound_beta_2')):
-            usedFiles.add(v.lower())
+            fpath = v.lower()
+            # MH sound file paths are wrong (?) change CustomSE to AVG
+            fpath = re.sub(r'/customse/act24side/', '/avg/act24side/', fpath)
+            usedFiles.add(fpath)
     except:
         pass
 with open('.gitignore','w') as gi:
