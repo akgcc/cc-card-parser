@@ -34,7 +34,7 @@ def get_operator_lists(live = True):
             na_m = time_parser.match(na_times)
             cn_m = time_parser.match(cn_times)
             sim_link = link_parser.findall(row)[0]
-            blue = int('#BB_' in sim_link)
+            blue = int('#BB_'.lower() in sim_link.lower())
             for op_name in op_parser.findall(shop_ops.findall(row)[0]):
                 if na_m:
                     l = NA_OPS.setdefault(op_name,{'shop':[],'banner':[]})
@@ -52,4 +52,5 @@ def get_operator_lists(live = True):
                     
 get_operator_lists(live=True)
 with open('./json/banner_history.json','w') as f:
-    json.dump({'NA':NA_OPS,'CN':CN_OPS},f)
+    if NA_OPS and CN_OPS:
+        json.dump({'NA':NA_OPS,'CN':CN_OPS},f)
