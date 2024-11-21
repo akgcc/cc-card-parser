@@ -78,7 +78,8 @@ def get_operator_lists_wiki():
     r.encoding = 'utf8'
     content = r.text
     pages = re.compile('href="/wiki/Headhunting/Banners/Former([^"]*)',re.DOTALL)
-    urls = [f'https://arknights.wiki.gg/wiki/Headhunting/Banners/Former{suffix}?action=edit' for suffix in pages.findall(content)]
+    urls = ['https://arknights.wiki.gg/wiki/Headhunting/Banners?action=edit'] # current banners
+    urls.extend([f'https://arknights.wiki.gg/wiki/Headhunting/Banners/Former{suffix}?action=edit' for suffix in pages.findall(content)])
     for url in urls:
         r = requests.get(url)
         r.encoding = 'utf8'
@@ -106,6 +107,6 @@ def get_operator_lists_wiki():
 get_operator_lists(live=True)
 NA_OPS = {}
 get_operator_lists_wiki()
-with open('banner_history.json','w') as f:
+with open('./json/banner_history.json','w') as f:
     if NA_OPS and CN_OPS:
         json.dump({'NA':NA_OPS,'CN':CN_OPS},f)
