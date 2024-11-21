@@ -180,7 +180,7 @@ def get_operator_lists_prts():
                 l['banner'].append({'date': date, 'blue': int(blue > 0)})
                 if 'shop' in op['args'] or 'shop2' in op['args']:
                     l['shop'].append({'date': date, 'blue': int(blue > 0)})
-            blue -= 1
+        blue -= 1
 get_operator_lists_prts()
 # get_operator_lists(live=True)
 get_operator_lists_wiki()
