@@ -1,4 +1,5 @@
 '''Get banner history from gamepress and convert to json format.'''
+## NOTE: if gamepress revives check to make sure kernal locating banners are ignored
 import requests
 import re
 import json
@@ -28,7 +29,7 @@ def get_operator_lists(live = True):
             banner_ops = re.compile('<td[^>]*views-field-field-featured-characters[^>]*>(.*?)</td>',re.DOTALL)
             time_parser = re.compile('<time[^>]*?>([^<]*)</time>',re.DOTALL)
             op_parser = re.compile('<a[^>]*?>([^<]*)</a>',re.DOTALL)
-            link_parser = re.compile('<td[^>]*views-field-field-event-banner[^>]*>[^<]*<a\s+href="([^"]*)',re.DOTALL)
+            link_parser = re.compile('<td[^>]*views-field-field-event-banner[^>]*>[^<]*<a\\s+href="([^"]*)',re.DOTALL)
             na_times = na_date.findall(row)[0]
             cn_times = cn_date.findall(row)[0]
             na_m = time_parser.match(na_times)
@@ -49,8 +50,62 @@ def get_operator_lists(live = True):
                 if cn_m:
                     l = CN_OPS.setdefault(op_name,{'shop':[],'banner':[]})
                     l['banner'].append({'date': cn_m.group(1), 'blue': blue})
-                    
+def extract_banners_cell_templates(wikitext):
+    # chatGPT function
+    # Regex pattern to match {{Banners cell|...}} templates
+    pattern = r'{{Banners cell\|([^}]+)}}'
+
+    # Find all matches
+    matches = re.findall(pattern, wikitext)
+
+    # List to store parsed parameters for each template
+    parsed_templates = []
+
+    for match in matches:
+        # Split parameters by '|' and extract key-value pairs
+        parameters = {}
+        for param in match.split('|'):
+            # Split key-value by '='
+            key_value = param.split('=', 1)
+            if len(key_value) == 2:
+                parameters[key_value[0].strip()] = key_value[1].strip()
+        parsed_templates.append(parameters)
+
+    return parsed_templates
+def get_operator_lists_wiki():
+    # get list of banner pages:
+    r = requests.get('https://arknights.wiki.gg/wiki/Category:Former_headhunting_banners')
+    r.encoding = 'utf8'
+    content = r.text
+    pages = re.compile('href="/wiki/Headhunting/Banners/Former([^"]*)',re.DOTALL)
+    urls = [f'https://arknights.wiki.gg/wiki/Headhunting/Banners/Former{suffix}?action=edit' for suffix in pages.findall(content)]
+    for url in urls:
+        r = requests.get(url)
+        r.encoding = 'utf8'
+        content = r.text
+        match = re.search(r'<textarea[^>]*>(.*?)</textarea>', content, re.DOTALL)
+        mediawiki_source = match.group(1)
+        banners = []
+        banners.extend(extract_banners_cell_templates(mediawiki_source)) # need to do this for each year
+        
+        for banner in banners:
+            blue = int('type' in banner and 'kernal' not in banner['type'].lower())
+            if blue and 'locating' in banner['type'].lower():
+                continue # skip kernal locating
+            date = banner['date'].split('&amp;ndash;')[0].strip() if 'date' in banner else banner['global'].split('&amp;ndash;')[0].strip()
+            ops = []
+            for key in ['operators','operators1','operators2']:
+                if key in banner:
+                    ops.extend([n.strip() for n in banner[key].split(',')])
+            store = [int(n.strip()) for n in banner['store'].split(',')] if 'store' in banner else [0]*len(ops)
+            for i, op_name in enumerate(ops):
+                l = NA_OPS.setdefault(op_name,{'shop':[],'banner':[]})
+                l['banner'].append({'date': date, 'blue': blue})
+                if store[i] == 1:
+                    l['shop'].append({'date': date, 'blue': blue})
 get_operator_lists(live=True)
-with open('./json/banner_history.json','w') as f:
+NA_OPS = {}
+get_operator_lists_wiki()
+with open('banner_history.json','w') as f:
     if NA_OPS and CN_OPS:
         json.dump({'NA':NA_OPS,'CN':CN_OPS},f)

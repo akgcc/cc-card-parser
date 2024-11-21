@@ -3,19 +3,20 @@
 #https://docs.google.com/forms/d/e/1FAIpQLSdOL5pjOH-VRV3Jg_AD20szZUWU-3e4h80aVpJ3HzM57qEeag/viewanalytics
 #https://docs.google.com/forms/d/e/1FAIpQLSeJADbpZ6uPlkG9lNmoVaXD538EKiXEVspeFjjV6pa2q2c44A/viewanalytics
 #https://docs.google.com/forms/d/e/1FAIpQLSe3ib2JNp5i7dQUArH2HfbFdVaVTeOPhgvMc1y6eqtZfWUMwQ/viewanalytics
+#https://docs.google.com/forms/d/1b2CYOOVazgckfpEpL3boihh6MO1VUmhkDSOfawnH4rs/viewanalytics
 import json
 from pprint import pprint
 
 # search for: #@ EDIT THIS in this file to find other changes you must make for a different survey.
-RAW_RESULTS = 'poll_results_3_raw.json'
-SKIP_QUESTIONS = [2054551172] # skip a specific question (the feedback q at the end)
+RAW_RESULTS = 'poll_results_4_raw.json'
+SKIP_QUESTIONS = [1867233223,228005130,1480058194,1309466999] # skip a specific question (the feedback q at the end)
 BOOLEAN_QUESTIONS = ['Do you own this operator?','Promotion level','Skills and Modules']
-SKIP_RESPONSES = ["Don't know"] # responses in this list will be ignored
+SKIP_RESPONSES = ["Don't know",'N/A'] # responses in this list will be ignored
 
 OUTPUT_FILENAME = 'json/'+''.join(RAW_RESULTS.split('_raw'))
 # will also output data to polldata.txt
 
-with open(RAW_RESULTS,'r') as f:
+with open(RAW_RESULTS,'r', encoding='utf-8') as f:
     res = json.load(f)
 QUESTIONS = res[0][1][1] # res[0][1][0] if no intro? (this is likely correct already)
 ANSWERS = res[3]
@@ -37,10 +38,11 @@ E2_ANSWER_MAP = {}
 E2_COUNT_PER_OP = {}
 bar_total = 0
 # first get total survey count:
-# print(QUESTION_MAP)
+# pprint(QUESTION_MAP)
+# pprint(ANSWERS)
 for a in ANSWERS:
     if a[0] in QUESTION_MAP:
-        if QUESTION_MAP[a[0]][0] == 'Promotion level':
+        # if QUESTION_MAP[a[0]][0] == 'Promotion level':
             total = sum([v[2] for v in a[1]])
             break
 bar_total = total
@@ -95,11 +97,12 @@ for a in ANSWERS:
 
 #@ EDIT THIS
 NAME_MAP = {
-    '29': 'Surtr',
-    'Kal\'tits': 'Kal\'tsit',
-    'Ch\'en The Holungday': 'Ch\'en the Holungday',
-    'Skadi The Corrupting Heart': 'Skadi the Corrupting Heart',
-    'Pozemka':'Pozëmka',
+    # '29': 'Surtr',
+    # 'Kal\'tits': 'Kal\'tsit',
+    # 'Ch\'en The Holungday': 'Ch\'en the Holungday',
+    # 'Skadi The Corrupting Heart': 'Skadi the Corrupting Heart',
+    'Reed The Flame Shadow': 'Reed the Flame Shadow',
+    'Pozyomka':'Pozëmka',
 }
 for k,v in NAME_MAP.items():
     ANSWER_MAP.setdefault(v,{}).update(ANSWER_MAP.get(k,{}))
@@ -113,21 +116,38 @@ for k,v in NAME_MAP.items():
 # map questions to the axes of the chart
 #@ EDIT THIS
 col_map = {
-'How good is the operator on CC high risk?':'CC',
-'How good of a pick the operator is on IS2?':'IS2',
-'How good is the operator on SSS?':'SSS',
+# 'How good is the operator on CC high risk?':'CC',
+# 'How good of a pick the operator is on IS2?':'IS2',
+# 'How good is the operator on SSS?':'SSS',
+    'Like rating':'Like',
+    'Sex rating':'Sex',
 }
+pprint(ANSWER_MAP)
+# for v in ANSWER_MAP.values():
+    # for k2, v2 in col_map.items():
+        # v[v2] = v[k2]
+        # del v[k2]
+# for v in ANSWER_MAP.values():
+    # v['Overall'] = sum(v.values())/len(v.values())
 
-for v in ANSWER_MAP.values():
-    for k2, v2 in col_map.items():
-        v[v2] = v[k2]
-        del v[k2]
-for v in ANSWER_MAP.values():
+NEW_ANSWER_MAP = {}
+for k,v in ANSWER_MAP.items():
+    for k2,v2 in v.items():
+        op = NAME_MAP.get(k2,k2)
+        NEW_ANSWER_MAP[op] = NEW_ANSWER_MAP.setdefault(op,{})
+        NEW_ANSWER_MAP[op][col_map.get(k,k)]=v2
+for v in NEW_ANSWER_MAP.values():
     v['Overall'] = sum(v.values())/len(v.values())
+pprint(NEW_ANSWER_MAP)
 
 #@ EDIT THIS
 # order = ['Power','Utility','Fun','Coom','Overall']
-order = ['CC','IS2','SSS','Overall']
+# order = ['CC','IS2','SSS','Overall']
+order = ['Like','Sex','Overall']
+
+with open(OUTPUT_FILENAME,'w') as f:
+    json.dump({"scatter":{"data":NEW_ANSWER_MAP,"default_axes":order,"total":bar_total},"date":"November 2024","url":"https://docs.google.com/forms/d/1b2CYOOVazgckfpEpL3boihh6MO1VUmhkDSOfawnH4rs/viewanalytics"}, f)
+exit() # poll 4
 
 with open('polldata.txt','w') as f:
     f.write('Name\t'+'\t'.join(order)+'\n')
@@ -143,4 +163,4 @@ with open('polldata.txt','w') as f:
         line+= '\t'+str(v['E2']/v['Ownership'])
         f.write(line+'\n')
 with open(OUTPUT_FILENAME,'w') as f:
-    json.dump({"scatter":{"data":ANSWER_MAP,"default_axes":order}, "bar":{"data":E2_ANSWER_MAP,"total":bar_total},"date":"February 2023","url":"https://docs.google.com/forms/d/e/1FAIpQLSe3ib2JNp5i7dQUArH2HfbFdVaVTeOPhgvMc1y6eqtZfWUMwQ/viewanalytics"}, f)
+    json.dump({"scatter":{"data":ANSWER_MAP,"default_axes":order}, "bar":{"data":E2_ANSWER_MAP,"total":bar_total},"date":"November 2024","url":"https://docs.google.com/forms/d/1b2CYOOVazgckfpEpL3boihh6MO1VUmhkDSOfawnH4rs/viewanalytics"}, f)
