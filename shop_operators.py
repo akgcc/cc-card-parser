@@ -10,6 +10,11 @@ from html import unescape
 # from lxml import etree
 NA_OPS = {}
 CN_OPS = {}
+ALIAS = {
+    'Mlynar':'Młynar',
+    'Leto':'Лето',
+    '麒麟X夜刀':'麒麟R夜刀',
+    }
 def get_operator_lists(live = True):
     # xml is malformed, so we use regex instead.
     if live:
@@ -131,9 +136,11 @@ def get_operator_lists_wiki():
         banners.extend(extract_banners_cell_templates(mediawiki_source)) # need to do this for each year
         
         for banner in banners:
-            blue = int('type' in banner and 'kernal' not in banner['type'].lower())
+            blue = int('type' in banner and 'kernel' in banner['type'].lower())
             if blue and 'locating' in banner['type'].lower():
-                continue # skip kernal locating
+                continue # skip kernel locating
+            if 'type' in banner and 'linkup' in banner['type'].lower():
+                continue # skip linkup
             date = banner['date'].split('&amp;ndash;')[0].strip() if 'date' in banner else banner['global'].split('&amp;ndash;')[0].strip()
             ops = []
             for key in ['operators','operators1','operators2']:
@@ -141,7 +148,7 @@ def get_operator_lists_wiki():
                     ops.extend([n.strip() for n in banner[key].split(',')])
             store = [int(n.strip()) for n in banner['store'].split(',')] if 'store' in banner else [0]*len(ops)
             for i, op_name in enumerate(ops):
-                l = NA_OPS.setdefault(op_name,{'shop':[],'banner':[]})
+                l = NA_OPS.setdefault(ALIAS.get(op_name,op_name),{'shop':[],'banner':[]})
                 l['banner'].append({'date': date, 'blue': blue})
                 if store[i] == 1:
                     l['shop'].append({'date': date, 'blue': blue})
@@ -176,7 +183,7 @@ def get_operator_lists_prts():
             # skip kernal locating ??
             date = banner['date'].split('~&lt;')[0].strip()
             for op in banner['avatars']:
-                l = CN_OPS.setdefault(op['name'],{'shop':[],'banner':[]})
+                l = CN_OPS.setdefault(ALIAS.get(op['name'],op['name']),{'shop':[],'banner':[]})
                 l['banner'].append({'date': date, 'blue': int(blue > 0)})
                 if 'shop' in op['args'] or 'shop2' in op['args']:
                     l['shop'].append({'date': date, 'blue': int(blue > 0)})
