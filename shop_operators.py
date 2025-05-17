@@ -153,32 +153,26 @@ def get_operator_lists_wiki():
                 if store[i] == 1:
                     l['shop'].append({'date': date, 'blue': blue})
 def get_operator_lists_prts():
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    }
     # list of blue banner years:
-    r = requests.get('https://prts.wiki/index.php?title=%E5%8D%A1%E6%B1%A0%E4%B8%80%E8%A7%88/%E5%B8%B8%E9%A9%BB%E4%B8%AD%E5%9D%9A%E5%AF%BB%E8%AE%BF%26%E4%B8%AD%E5%9D%9A%E7%94%84%E9%80%89&action=edit')
+    r = requests.get('https://prts.wiki/index.php?title=%E5%8D%A1%E6%B1%A0%E4%B8%80%E8%A7%88/%E5%B8%B8%E9%A9%BB%E4%B8%AD%E5%9D%9A%E5%AF%BB%E8%AE%BF%26%E4%B8%AD%E5%9D%9A%E7%94%84%E9%80%89&action=raw',  headers=headers)
     r.encoding = 'utf8'
-    content = r.text
-    match = re.search(r'<textarea[^>]*>(.*?)</textarea>', content, re.DOTALL)
-    mediawiki_source = match.group(1)
-    pages = re.findall('pageName=([^|}]*)',mediawiki_source)
+    pages = re.findall('pageName=([^|}]*)',r.text)
     blue = len(pages)
     # list of standard banner years:
-    r = requests.get('https://prts.wiki/index.php?title=%E5%8D%A1%E6%B1%A0%E4%B8%80%E8%A7%88/%E5%B8%B8%E9%A9%BB%E6%A0%87%E5%87%86%E5%AF%BB%E8%AE%BF&action=edit')
+    r = requests.get('https://prts.wiki/index.php?title=%E5%8D%A1%E6%B1%A0%E4%B8%80%E8%A7%88/%E5%B8%B8%E9%A9%BB%E6%A0%87%E5%87%86%E5%AF%BB%E8%AE%BF&action=raw',  headers=headers)
     r.encoding = 'utf8'
-    content = r.text
-    match = re.search(r'<textarea[^>]*>(.*?)</textarea>', content, re.DOTALL)
-    mediawiki_source = match.group(1)
-    pages.extend(re.findall('pageName=([^|}]*)',mediawiki_source))
+    pages.extend(re.findall('pageName=([^|}]*)',r.text))
     # these are limited banners, which include discontinued ones (like solo rate ups), currently they are just on one page
     pages.append('卡池一览/限时寻访')
     for page in pages:
-        url = f'https://prts.wiki/index.php?title={quote(unescape(page))}&action=edit'
-        r = requests.get(url)
+        url = f'https://prts.wiki/index.php?title={quote(unescape(page))}&action=raw'
+        r = requests.get(url,  headers=headers)
         r.encoding = 'utf8'
-        content = r.text
-        match = re.search(r'<textarea[^>]*>(.*?)</textarea>', content, re.DOTALL)
-        mediawiki_source = match.group(1)
         banners = []
-        banners.extend(extract_prts_banners_cell_templates(mediawiki_source)) # need to do this for each year
+        banners.extend(extract_prts_banners_cell_templates(r.text)) # need to do this for each year
         for banner in banners:
             # skip kernal locating ??
             date = banner['date'].split('~&lt;')[0].strip()
