@@ -131,25 +131,29 @@ def get_operator_lists_wiki():
         r.encoding = 'utf8'
         content = r.text
         banners = []
-        banners.extend(extract_banners_cell_templates(content)) # need to do this for each year
-        
+        banners.extend(extract_banners_cell_templates(content))  # for each year
+
         for banner in banners:
             blue = int('type' in banner and 'kernel' in banner['type'].lower())
             if blue and 'locating' in banner['type'].lower():
-                continue # skip kernel locating
+                continue  # skip kernel locating
             if 'type' in banner and 'linkup' in banner['type'].lower():
-                continue # skip linkup
-            date = banner['date'].split('&amp;ndash;')[0].strip() if 'date' in banner else banner['global'].split('&amp;ndash;')[0].strip()
+                continue  # skip linkup
+
+            raw_date = banner.get('date') or banner.get('global', '')
+            date = unescape(raw_date).split('–')[0].strip()
+
             ops = []
-            for key in ['operators','operators1','operators2']:
+            for key in ['operators', 'operators1', 'operators2']:
                 if key in banner:
                     ops.extend([n.strip() for n in banner[key].split(',')])
             store = [int(n.strip()) for n in banner['store'].split(',')] if 'store' in banner else [0]*len(ops)
             for i, op_name in enumerate(ops):
-                l = NA_OPS.setdefault(ALIAS.get(op_name,op_name),{'shop':[],'banner':[]})
+                l = NA_OPS.setdefault(ALIAS.get(op_name, op_name), {'shop': [], 'banner': []})
                 l['banner'].append({'date': date, 'blue': blue})
                 if store[i] == 1:
                     l['shop'].append({'date': date, 'blue': blue})
+
 def get_operator_lists_prts():
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
