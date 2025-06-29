@@ -15,7 +15,7 @@ ALIAS = {
     'Leto':'Лето',
     '麒麟X夜刀':'麒麟R夜刀',
     }
-def get_operator_lists(live = True):
+def get_operator_lists_gp(live = True):
     # xml is malformed, so we use regex instead.
     if live:
         r = requests.get('https://gamepress.gg/arknights/database/banner-list-gacha')
@@ -61,7 +61,7 @@ def get_operator_lists(live = True):
 def extract_banners_cell_templates(wikitext):
     # chatGPT function
     # Regex pattern to match {{Banners cell|...}} templates
-    pattern = r'{{Banners cell\|([^}]+)}}'
+    pattern = r'{{Banners[ _]cell\|([^}]+)}}'
 
     # Find all matches
     matches = re.findall(pattern, wikitext)
@@ -124,16 +124,14 @@ def get_operator_lists_wiki():
     r.encoding = 'utf8'
     content = r.text
     pages = re.compile('href="/wiki/Headhunting/Banners/Former([^"]*)',re.DOTALL)
-    urls = ['https://arknights.wiki.gg/wiki/Headhunting/Banners?action=edit'] # current banners
-    urls.extend([f'https://arknights.wiki.gg/wiki/Headhunting/Banners/Former{suffix}?action=edit' for suffix in pages.findall(content)])
+    urls = ['https://arknights.wiki.gg/wiki/Headhunting/Banners?action=raw'] # current banners
+    urls.extend([f'https://arknights.wiki.gg/wiki/Headhunting/Banners/Former{suffix}?action=raw' for suffix in pages.findall(content)])
     for url in urls:
         r = requests.get(url)
         r.encoding = 'utf8'
         content = r.text
-        match = re.search(r'<textarea[^>]*>(.*?)</textarea>', content, re.DOTALL)
-        mediawiki_source = match.group(1)
         banners = []
-        banners.extend(extract_banners_cell_templates(mediawiki_source)) # need to do this for each year
+        banners.extend(extract_banners_cell_templates(content)) # need to do this for each year
         
         for banner in banners:
             blue = int('type' in banner and 'kernel' in banner['type'].lower())
@@ -183,7 +181,7 @@ def get_operator_lists_prts():
                     l['shop'].append({'date': date, 'blue': int(blue > 0)})
         blue -= 1
 get_operator_lists_prts()
-# get_operator_lists(live=True)
+# get_operator_lists_gp(live=True)
 get_operator_lists_wiki()
 with open('./json/banner_history.json','w') as f:
     if NA_OPS and CN_OPS:
